@@ -1,12 +1,13 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
-use std::thread;
+use std::thread::{self, sleep};
+use std::time::Duration;
 
 #[derive(Debug)]
 struct NetworkStats {
@@ -39,9 +40,9 @@ struct Transmit {
     compressed: u64,
 }
 
-fn parse_data() -> Result<Vec<NetworkStats>> {
-    let data_path = PathBuf::from("/proc/net/dev");
+fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
     let mut output = Vec::new();
+    let data_path = PathBuf::from("/proc/net/dev");
 
     if let Err(e) = fs::metadata(&data_path) {
         eprint!("{e}");
@@ -97,14 +98,27 @@ fn parse_data() -> Result<Vec<NetworkStats>> {
     Ok(output)
 }
 
+fn print_proc_net_dev(info: Vec<NetworkStats>) -> Result<()> {
+    todo!();
+}
+
+fn parse_proc_net_tcp() -> Result<()> {
+    todo!();
+}
+
+fn print_proc_net_tcp() -> Result<()> {
+    todo!();
+}
+
 fn main() -> Result<()> {
-    let output = parse_data()?;
-
-    for data in output {
-        if data.name == "wlan0" {
-            println!("{:?}", data.receive);
+    let interval = Duration::new(2, 0);
+    loop {
+        let output = parse_proc_net_dev()?;
+        for data in output {
+            if data.name == "wlan0" {
+                println!("{:?}", data.receive);
+            }
         }
+        sleep(interval);
     }
-
-    Ok(())
 }
