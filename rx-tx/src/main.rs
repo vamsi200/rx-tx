@@ -3,14 +3,24 @@
 #![allow(dead_code)]
 use anyhow::{anyhow, Error, Ok, Result};
 use core::net;
+use crossterm::event::{self, Event};
 use ratatui::crossterm::event::read;
+use ratatui::symbols::line;
+use ratatui::text::Line;
+use ratatui::Terminal;
+use ratatui::{text::Text, Frame};
+use std::fmt::format;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
 use std::thread::{self, sleep};
 use std::time::Duration;
-
+use std::vec;
+mod ui;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
+use ui::hello::App;
 #[derive(Debug)]
 struct NetworkStats {
     name: String,
@@ -41,7 +51,6 @@ struct Transmit {
     carrier: u64,
     compressed: u64,
 }
-
 fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
     let mut output = Vec::new();
     let data_path = PathBuf::from("/proc/net/dev");
@@ -104,6 +113,50 @@ fn print_proc_net_dev(info: Vec<NetworkStats>) -> Result<()> {
     todo!();
 }
 
+fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line> {
+    let lines: Vec<Line> = stats
+        .iter()
+        .flat_map(|interface| {
+            let mut lines = vec![];
+
+            lines.push(Line::from(format!(" {}", interface.name)));
+
+            lines
+        })
+        .collect();
+    lines
+}
+
+fn get_network_receive_data(stats: &Vec<NetworkStats>) -> Vec<Line> {
+    let lines: Vec<Line> = stats
+        .iter()
+        .flat_map(|interface| {
+            let mut lines = vec![];
+            lines.push(Line::from(format!(
+                " bytes: {}, packets: {}",
+                interface.receive.bytes, interface.receive.packets,
+            )));
+            lines
+        })
+        .collect();
+    lines
+}
+
+fn get_network_transmit_data(stats: &Vec<NetworkStats>) -> Vec<Line> {
+    let lines: Vec<Line> = stats
+        .iter()
+        .flat_map(|interface| {
+            let mut lines = vec![];
+            lines.push(Line::from(format!(
+                " bytes: {}, packets: {}",
+                interface.transmit.bytes, interface.transmit.packets,
+            )));
+            lines
+        })
+        .collect();
+    lines
+}
+
 #[derive(Debug)]
 struct TcpStats {
     sl: u16,
@@ -142,10 +195,14 @@ fn parse_hex_values(s: &str) -> Result<u64> {
 
 fn parse_hex_value_pairs(s: &str) -> Result<(u64, u64)> {
     let mut s = s.split(":");
-    let hex_value_one =
-        u64::from_str_radix(s.next().ok_or(anyhow!("Failed to parse left value"))?, 16)?;
-    let hex_value_two =
-        u64::from_str_radix(s.next().ok_or(anyhow!("Failed to parse right value"))?, 16)?;
+    let hex_value_one = u64::from_str_radix(
+        s.next().ok_or(anyhow!("Failed to parse left hex value"))?,
+        16,
+    )?;
+    let hex_value_two = u64::from_str_radix(
+        s.next().ok_or(anyhow!("Failed to parse right hex value"))?,
+        16,
+    )?;
     Ok((hex_value_one, hex_value_two))
 }
 
@@ -206,17 +263,9 @@ fn print_proc_net_tcp() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    // let interval = Duration::new(2, 0);
-    // loop {
-    //     let output = parse_proc_net_dev()?;
-    //     for data in output {
-    //         if data.name == "wlan0" {
-    //             println!("{:?}", data.receive);
-    //         }
-    //     }
-    //     sleep(interval);
-    // }
-    let s = parse_proc_net_tcp()?;
-    println!("{:?}", s);
+    let mut terminal = ratatui::init();
+    let mut app = App::default();
+    app.run(&mut terminal)?;
+    ratatui::restore();
     Ok(())
 }
