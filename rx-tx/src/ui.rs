@@ -1,18 +1,29 @@
+use crate::app;
 use crate::app::*;
 use crate::models::*;
 use crate::parser::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
 use crossterm::event::{self, read, Event, KeyCode};
+use ratatui::layout::Rect;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin};
 use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::symbols;
 use ratatui::symbols::scrollbar;
 use ratatui::text::{Line, Masked, Span};
 use ratatui::widgets::block::title;
+use ratatui::widgets::Axis;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Chart;
+use ratatui::widgets::Dataset;
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
+use std::collections::HashMap;
+use std::ops::Sub;
+use std::thread::sleep;
 use std::time::{Duration, Instant};
+use std::vec;
 
 pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkStats>) {
     let area = frame.area();
@@ -48,12 +59,12 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         .scroll((app.vertical_scroll as u16, 0))
         .block(block("Interface"));
 
-    let rx_rectangle = Paragraph::new(get_network_receive_data(data))
+    let rx_rectangle = Paragraph::new(get_network_receive_data(app, data))
         .white()
         .scroll((app.vertical_scroll as u16, 0))
         .block(r_block("Received"));
 
-    let tx_rectangle = Paragraph::new(get_network_transmit_data(data))
+    let tx_rectangle = Paragraph::new(get_network_transmit_data(app, data))
         .white()
         .scroll((app.vertical_scroll as u16, 0))
         .block(t_block("Transmit"));
@@ -64,9 +75,14 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
 
     frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓")),
-        chunks[1],
-        &mut app.vertical_scroll_state,
+            .begin_symbol(Some("|"))
+            .end_symbol(Some("|")),
+        rx_rect,
+        &mut app.horizontal_scroll_state,
     );
+    render_graph(app, frame, chunks[2]);
+}
+
+pub fn render_graph(app: &mut App, frame: &mut Frame, area: Rect) {
+    todo!()
 }

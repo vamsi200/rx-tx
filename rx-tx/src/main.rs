@@ -1,10 +1,11 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use crate::app::App;
 use anyhow::{anyhow, Error, Ok, Result};
-use app::App;
 use models::*;
 use parser::*;
+
 mod app;
 mod models;
 mod parser;

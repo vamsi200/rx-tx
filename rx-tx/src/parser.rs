@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use crate::app::App;
 use crate::models::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use core::net;
@@ -93,14 +94,14 @@ pub fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line> {
     lines
 }
 
-pub fn get_network_receive_data(stats: &Vec<NetworkStats>) -> Vec<Line> {
+pub fn get_network_receive_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()
         .flat_map(|interface| {
             let mut lines = vec![];
             lines.push(Line::from(format!(
                 " bytes: {}, packets: {}",
-                interface.receive.display(true),
+                interface.receive.display(app.raw_bytes, app),
                 interface.receive.packets,
             )));
             lines
@@ -109,14 +110,14 @@ pub fn get_network_receive_data(stats: &Vec<NetworkStats>) -> Vec<Line> {
     lines
 }
 
-pub fn get_network_transmit_data(stats: &Vec<NetworkStats>) -> Vec<Line> {
+pub fn get_network_transmit_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()
         .flat_map(|interface| {
             let mut lines = vec![];
             lines.push(Line::from(format!(
                 " bytes: {}, packets: {}",
-                interface.transmit.formatted(),
+                interface.transmit.display(app.raw_bytes, app),
                 interface.transmit.packets,
             )));
             lines

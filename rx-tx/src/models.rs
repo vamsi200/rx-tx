@@ -1,3 +1,5 @@
+use crate::app::{App, ByteUnit};
+
 #[derive(Debug)]
 pub struct NetworkStats {
     pub name: String,
@@ -30,38 +32,60 @@ pub struct Transmit {
 }
 
 impl Receive {
-    pub fn display(&self, raw_bytes: bool) -> String {
+    pub fn display(&self, raw_bytes: bool, app: &mut App) -> String {
         if raw_bytes {
             self.bytes.to_string()
         } else {
-            format_bytes(self.bytes)
+            format_bytes(self.bytes, &app.byte_unit)
         }
     }
 }
 
 impl Transmit {
-    pub fn formatted(&self) -> String {
-        format_bytes(self.bytes)
+    pub fn display(&self, raw_bytes: bool, app: &mut App) -> String {
+        if raw_bytes {
+            self.bytes.to_string()
+        } else {
+            format_bytes(self.bytes, &app.byte_unit)
+        }
     }
 }
 
-pub fn format_bytes(data: u64) -> String {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-    const TB: f64 = GB * 1024.0;
+fn format_bytes(data: u64, unit: &ByteUnit) -> String {
+    match unit {
+        ByteUnit::Binary => {
+            const KB: f64 = 1024.0;
+            const MB: f64 = KB * 1024.0;
+            const GB: f64 = MB * 1024.0;
+            const TB: f64 = GB * 1024.0;
 
-    let data = data as f64;
-    if data >= TB {
-        format!("{:.2} TB", data / TB)
-    } else if data >= GB {
-        format!("{:.2} GB", data / GB)
-    } else if data >= MB {
-        format!("{:.2} MB", data / MB)
-    } else if data >= KB {
-        format!("{:.2} KB", data / KB)
-    } else {
-        format!("{} B", data as u64)
+            let data = data as f64;
+            if data >= TB {
+                format!("{:.2} TiB", data / TB)
+            } else if data >= GB {
+                format!("{:.2} GiB", data / GB)
+            } else if data >= MB {
+                format!("{:.2} MiB", data / MB)
+            } else if data >= KB {
+                format!("{:.2} KiB", data / KB)
+            } else {
+                format!("{} B", data as u64)
+            }
+        }
+        ByteUnit::Decimal => {
+            let data = data as f64;
+            if data >= 1e12 {
+                format!("{:.2} TB", data / 1e12)
+            } else if data >= 1e9 {
+                format!("{:.2} GB", data / 1e9)
+            } else if data >= 1e6 {
+                format!("{:.2} MB", data / 1e6)
+            } else if data >= 1e3 {
+                format!("{:.2} KB", data / 1e3)
+            } else {
+                format!("{} B", data as u64)
+            }
+        }
     }
 }
 

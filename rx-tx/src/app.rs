@@ -1,3 +1,6 @@
+use crate::models::*;
+use crate::parser::*;
+use crate::ui::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
 use crossterm::event::{self, read, Event, KeyCode};
@@ -9,19 +12,46 @@ use ratatui::widgets::block::title;
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::models::*;
-use crate::parser::*;
-use crate::ui::*;
-
-#[derive(Default)]
 pub struct App {
+    pub prev_stats: Option<Vec<NetworkStats>>,
+    pub graph_data: HashMap<String, Vec<(f64, f64)>>,
+    pub start_time: Instant,
+    pub window: [f64; 2],
+    pub raw_bytes: bool,
+    pub byte_unit: ByteUnit,
     pub current_tab: Tab,
     pub vertical_scroll_state: ScrollbarState,
     pub horizontal_scroll_state: ScrollbarState,
     pub horizontal_scroll: usize,
     pub vertical_scroll: usize,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            prev_stats: None,
+            graph_data: HashMap::new(),
+            start_time: Instant::now(),
+            window: [0.0, 60.0],
+            raw_bytes: false,
+            byte_unit: ByteUnit::default(),
+            current_tab: Tab::default(),
+            vertical_scroll_state: ScrollbarState::new(0),
+            horizontal_scroll_state: ScrollbarState::new(0),
+            horizontal_scroll: 0,
+            vertical_scroll: 0,
+        }
+    }
+}
+
+#[derive(Default)]
+pub enum ByteUnit {
+    #[default]
+    Binary,
+    Decimal,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -58,6 +88,9 @@ impl App {
                     KeyCode::Char('j') => self.scroll_down(),
                     KeyCode::Char('k') => self.scroll_up(),
                     KeyCode::Char('l') => self.scroll_right(),
+                    KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
+                    KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
+                    KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
                     _ => {}
                 }
             }
