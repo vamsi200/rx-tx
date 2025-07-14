@@ -80,7 +80,6 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         rx_rect,
         &mut app.horizontal_scroll_state,
     );
-    render_graph(app, frame, chunks[2]);
 }
 
 pub fn render_graph(app: &mut App, frame: &mut Frame, area: Rect) {
