@@ -5,6 +5,8 @@ use crate::parser::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
 use crossterm::event::{self, read, Event, KeyCode};
+use ratatui::buffer;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin};
 use ratatui::style::{Color, Modifier, Style, Stylize};
@@ -19,11 +21,13 @@ use ratatui::widgets::Chart;
 use ratatui::widgets::Dataset;
 use ratatui::widgets::List;
 use ratatui::widgets::ListItem;
+use ratatui::widgets::ListState;
 use ratatui::widgets::Tabs;
 use ratatui::widgets::Widget;
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Sub;
 use std::thread::sleep;
@@ -52,28 +56,29 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
             .title(title.bold())
     };
 
-    let chunks =
-        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Percentage(50),
+        Constraint::Percentage(50),
+    ])
+    .split(area);
 
-    let top_part = chunks[0];
+    let tab_part = chunks[0];
+    let data_part = chunks[1];
+    let graph_part = chunks[2];
 
-    let second_part = chunks[1];
     let split_graph = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(second_part);
+        .split(graph_part);
     let top_chunks = Layout::horizontal([
         Constraint::Percentage(25),
         Constraint::Percentage(37),
         Constraint::Percentage(38),
     ])
-    .split(top_part);
+    .split(data_part);
+
     let interface_rect = top_chunks[0];
     let rx_rect = top_chunks[1];
     let tx_rect = top_chunks[2];
-
-    let para = Paragraph::new(get_network_interfaces(data))
-        .white()
-        .scroll((app.vertical_scroll as u16, 0))
-        .block(block("Interface"));
 
     let rx_rectangle = Paragraph::new(get_network_receive_data(app, data))
         .white()
@@ -84,7 +89,65 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         .white()
         .scroll((app.vertical_scroll as u16, 0))
         .block(t_block("Transmit"));
-    frame.render_widget(para, interface_rect);
+
+    let titles: Vec<_> = Tab::titles().iter().map(|&s| s).collect();
+    let tab =
+        Tabs::new(titles).block(Block::default().style(Style::default().fg(Color::LightYellow)));
+
+    frame.render_widget(tab, tab_part);
+
+    let interface_names: Vec<String> = data
+        .iter()
+        .map(|interface| interface.name.clone())
+        .collect();
+
+    let (list_items, block_title, mut state) = match &app.mode {
+        app::Mode::SelectingInterface { filter, index } => {
+            let filtered: Vec<_> = interface_names
+                .iter()
+                .filter(|s| s.contains(filter))
+                .collect();
+
+            let items: Vec<ListItem> = filtered
+                .iter()
+                .map(|x| ListItem::new(format!(" {}", x)))
+                .collect();
+
+            let mut state = ListState::default();
+            if !filtered.is_empty() {
+                let s = (*index).min(filtered.len().saturating_sub(1));
+                state.select(Some(s));
+            }
+            (items, "Select Interface", state)
+        }
+        app::Mode::Normal => {
+            let state = ListState::default();
+            let items: Vec<ListItem> = interface_names
+                .iter()
+                .map(|x| ListItem::new(format!(" {}", x)))
+                .collect();
+
+            (items, "Interface", state)
+        }
+    };
+
+    let mut list = List::new(list_items)
+        .block(block(block_title))
+        .style(Style::default().fg(Color::White));
+    match &app.mode {
+        app::Mode::SelectingInterface { .. } => {
+            list = list
+                .highlight_symbol(">>")
+                .highlight_style(Style::default().fg(Color::White))
+                .highlight_spacing(ratatui::widgets::HighlightSpacing::Always);
+
+            frame.render_stateful_widget(list, interface_rect, &mut state);
+        }
+        app::Mode::Normal => {
+            frame.render_widget(list, interface_rect);
+        }
+    }
+
     frame.render_widget(rx_rectangle, rx_rect);
     frame.render_widget(tx_rectangle, tx_rect);
 
@@ -95,15 +158,16 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         rx_rect,
         &mut app.horizontal_scroll_state,
     );
-    render_rx_graph(app, frame, split_graph[0]);
-    render_tx_graph(app, frame, split_graph[1]);
+
+    draw_rx_graph(app, frame, split_graph[0]);
+    draw_tx_graph(app, frame, split_graph[1]);
 }
 
-pub fn render_rx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
+pub fn draw_rx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
     let rx_max = app.rx_data.iter().map(|&(_, y)| y).fold(0.0, f64::max);
 
     let datasets = vec![Dataset::default()
-        .name("RX")
+        .name(app.interface_name.clone())
         .marker(symbols::Marker::Block)
         .style(Style::default().fg(Color::Blue))
         .graph_type(ratatui::widgets::GraphType::Bar)
@@ -124,10 +188,10 @@ pub fn render_rx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(chart, area);
 }
-pub fn render_tx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
+pub fn draw_tx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
     let tx_max = app.tx_data.iter().map(|&(_, y)| y).fold(0.0, f64::max);
     let datasets = vec![Dataset::default()
-        .name("TX")
+        .name(app.interface_name.clone())
         .marker(symbols::Marker::Block)
         .graph_type(ratatui::widgets::GraphType::Bar)
         .style(Style::default().fg(Color::Red))

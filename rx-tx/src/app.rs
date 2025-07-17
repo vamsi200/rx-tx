@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use std::vec;
 
 pub struct App {
+    pub interface_name: String,
     pub mode: Mode,
     pub selection_state: ListState,
     pub selected_interface: InterfaceSelected,
@@ -30,7 +31,7 @@ pub struct App {
     pub window: [f64; 2],
     pub raw_bytes: bool,
     pub byte_unit: ByteUnit,
-    pub current_tab: Tab,
+    pub selected_tab: Tab,
     pub vertical_scroll_state: ScrollbarState,
     pub horizontal_scroll_state: ScrollbarState,
     pub horizontal_scroll: usize,
@@ -40,7 +41,12 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            selection_state: ListState::default(),
+            interface_name: String::new(),
+            selection_state: {
+                let mut state = ListState::default();
+                state.select(Some(0));
+                state
+            },
             mode: Mode::Normal,
             selected_interface: InterfaceSelected::All,
             prev_stats: None,
@@ -51,7 +57,7 @@ impl Default for App {
             window: [0.0, 60.0],
             raw_bytes: false,
             byte_unit: ByteUnit::default(),
-            current_tab: Tab::default(),
+            selected_tab: Tab::default(),
             vertical_scroll_state: ScrollbarState::new(0),
             horizontal_scroll_state: ScrollbarState::new(0),
             horizontal_scroll: 0,
@@ -87,7 +93,7 @@ pub enum Tab {
 
 impl Tab {
     pub fn titles() -> Vec<&'static str> {
-        vec!["Interface Mode (I)", "TCP Mode (T)"]
+        vec!["Net/Dev (I)", "Net/Tcp (T)"]
     }
 }
 
@@ -104,7 +110,6 @@ impl App {
             let now = self.start_time.elapsed().as_secs_f64();
             self.window = [now - 5.0, now];
             let vec_stats = parse_proc_net_dev()?;
-
             let _ = terminal.draw(|frame| self.render(frame, &vec_stats));
 
             if let Some(prev_data) = &self.prev_stats {
@@ -112,8 +117,20 @@ impl App {
                     let rx_delta = new.receive.bytes.saturating_sub(prev.receive.bytes);
                     let tx_delta = new.transmit.bytes.saturating_sub(prev.transmit.bytes);
 
-                    self.rx_data.push((now, rx_delta as f64));
-                    self.tx_data.push((now, tx_delta as f64));
+                    match &mut self.selected_interface {
+                        InterfaceSelected::All => {
+                            self.interface_name = "All".to_string();
+                            self.rx_data.push((now, rx_delta as f64));
+                            self.tx_data.push((now, tx_delta as f64));
+                        }
+                        InterfaceSelected::Interface(s) => {
+                            if new.name == s.to_string() {
+                                self.interface_name = s.to_string();
+                                self.rx_data.push((now, rx_delta as f64));
+                                self.tx_data.push((now, tx_delta as f64));
+                            }
+                        }
+                    }
                 }
             }
             self.prev_stats = Some(vec_stats);
@@ -125,18 +142,64 @@ impl App {
             }
 
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('h') => self.scroll_left(),
-                    KeyCode::Char('j') => self.scroll_down(),
-                    KeyCode::Char('k') => self.scroll_up(),
-                    KeyCode::Char('l') => self.scroll_right(),
-                    KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
-                    KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
-                    KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
-                    KeyCode::Char('i') => self.current_tab = Tab::Interface,
-                    KeyCode::Char('t') => self.current_tab = Tab::Tcp,
-                    _ => {}
+                match &mut self.mode {
+                    Mode::Normal => match key.code {
+                        KeyCode::Char('f') => {
+                            self.mode = Mode::SelectingInterface {
+                                filter: String::new(),
+                                index: 0,
+                            }
+                        }
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Char('h') => self.scroll_left(),
+                        KeyCode::Char('j') => self.scroll_down(),
+                        KeyCode::Char('k') => self.scroll_up(),
+                        KeyCode::Char('l') => self.scroll_right(),
+                        KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
+                        KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
+                        KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
+                        KeyCode::Char('i') | KeyCode::Char('I') => {
+                            self.selected_tab = Tab::Interface
+                        }
+                        KeyCode::Char('t') | KeyCode::Char('T') => self.selected_tab = Tab::Tcp,
+                        _ => {}
+                    },
+
+                    Mode::SelectingInterface { filter, index } => match key.code {
+                        KeyCode::Char(c) => {
+                            filter.push(c);
+                            *index = 0;
+                        }
+                        KeyCode::Backspace => {
+                            filter.pop();
+                        }
+                        KeyCode::Up => {
+                            if *index > 0 {
+                                *index -= 1;
+                            }
+                        }
+                        KeyCode::Down => {
+                            *index += 1;
+                        }
+
+                        KeyCode::Enter => {
+                            let name_match: Vec<_> = interface_name_vec
+                                .iter()
+                                .filter(|&name| name.contains(&*filter))
+                                .collect();
+
+                            if let Some(&selected_interface) = name_match.get(*index) {
+                                self.selected_interface =
+                                    InterfaceSelected::Interface(selected_interface.clone());
+                                self.mode = Mode::Normal;
+                            }
+                        }
+
+                        KeyCode::Esc => {
+                            self.mode = Mode::Normal;
+                        }
+                        _ => {}
+                    },
                 }
             }
         }
@@ -168,6 +231,11 @@ impl App {
             .position(self.horizontal_scroll);
     }
     pub fn render(&mut self, frame: &mut Frame, data: &Vec<NetworkStats>) {
-        crate::ui::draw_interface_mode(self, frame, data);
+        match self.selected_tab {
+            Tab::Interface => {
+                crate::ui::draw_interface_mode(self, frame, data);
+            }
+            Tab::Tcp => {}
+        }
     }
 }
