@@ -70,25 +70,30 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
     let split_graph = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(graph_part);
     let top_chunks = Layout::horizontal([
-        Constraint::Percentage(25),
-        Constraint::Percentage(37),
+        Constraint::Percentage(20),
+        Constraint::Length(1),
         Constraint::Percentage(38),
+        Constraint::Length(1),
+        Constraint::Percentage(40),
     ])
     .split(data_part);
 
     let interface_rect = top_chunks[0];
-    let rx_rect = top_chunks[1];
-    let tx_rect = top_chunks[2];
+    let rx_rect = top_chunks[2];
+    let tx_rect = top_chunks[4];
 
-    let rx_rectangle = Paragraph::new(get_network_receive_data(app, data))
+    let rx_para = Paragraph::new(get_network_receive_data(app, data))
         .white()
-        .scroll((app.vertical_scroll as u16, 0))
-        .block(r_block("Received"));
+        .block(r_block("Received"))
+        .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
 
-    let tx_rectangle = Paragraph::new(get_network_transmit_data(app, data))
+    let tx_para = Paragraph::new(get_network_transmit_data(app, data))
         .white()
-        .scroll((app.vertical_scroll as u16, 0))
-        .block(t_block("Transmit"));
+        .block(t_block("Transmit"))
+        .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
+
+    frame.render_widget(rx_para, rx_rect);
+    frame.render_widget(tx_para, tx_rect);
 
     let titles: Vec<_> = Tab::titles().iter().map(|&s| s).collect();
     let tab =
@@ -148,17 +153,26 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         }
     }
 
-    frame.render_widget(rx_rectangle, rx_rect);
-    frame.render_widget(tx_rectangle, tx_rect);
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .thumb_symbol("│")
+            .begin_symbol(Some("⇧"))
+            .end_symbol(Some("⇩")),
+        rx_rect.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut app.vertical_scroll_state,
+    );
 
     frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("|"))
-            .end_symbol(Some("|")),
-        rx_rect,
-        &mut app.horizontal_scroll_state,
+            .thumb_symbol("│")
+            .begin_symbol(Some("⇧"))
+            .end_symbol(Some("⇩")),
+        tx_rect,
+        &mut app.vertical_scroll_state,
     );
-
     draw_rx_graph(app, frame, split_graph[0]);
     draw_tx_graph(app, frame, split_graph[1]);
 }

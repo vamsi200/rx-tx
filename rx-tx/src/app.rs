@@ -105,6 +105,9 @@ impl App {
             .iter()
             .map(|s| s.name.clone())
             .collect();
+        let new_len = interface_name_vec.len();
+        self.vertical_scroll = 0;
+        self.vertical_scroll_state = ScrollbarState::new(new_len).position(0);
 
         loop {
             let now = self.start_time.elapsed().as_secs_f64();
@@ -151,10 +154,10 @@ impl App {
                             }
                         }
                         KeyCode::Char('q') => return Ok(()),
-                        KeyCode::Char('h') => self.scroll_left(),
-                        KeyCode::Char('j') => self.scroll_down(),
-                        KeyCode::Char('k') => self.scroll_up(),
-                        KeyCode::Char('l') => self.scroll_right(),
+                        KeyCode::Left => self.scroll_left(),
+                        KeyCode::Down => self.scroll_down(),
+                        KeyCode::Up => self.scroll_up(),
+                        KeyCode::Right => self.scroll_right(),
                         KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
                         KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
                         KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
@@ -222,7 +225,9 @@ impl App {
 
     pub fn scroll_right(&mut self) {
         self.horizontal_scroll = self.horizontal_scroll.saturating_add(1);
-        self.update_scroll_state();
+        self.horizontal_scroll_state = self
+            .horizontal_scroll_state
+            .position(self.horizontal_scroll);
     }
     pub fn update_scroll_state(&mut self) {
         self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
