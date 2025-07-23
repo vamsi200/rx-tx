@@ -18,7 +18,9 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
+#[derive(Clone)]
 pub struct App {
+    pub is_full_screen: bool,
     pub interface_name: String,
     pub mode: Mode,
     pub selection_state: ListState,
@@ -41,6 +43,7 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
+            is_full_screen: false,
             interface_name: String::new(),
             selection_state: {
                 let mut state = ListState::default();
@@ -66,13 +69,14 @@ impl Default for App {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum ByteUnit {
     #[default]
     Binary,
     Decimal,
 }
 
+#[derive(Clone)]
 pub enum Mode {
     Normal,
     SelectingInterface { filter: String, index: usize },
@@ -154,6 +158,7 @@ impl App {
                                 index: 0,
                             }
                         }
+                        KeyCode::Char('e') => self.is_full_screen = !self.is_full_screen,
                         KeyCode::Char('q') => return Ok(()),
                         KeyCode::Left => self.scroll_left(),
                         KeyCode::Down => self.scroll_down(),
@@ -201,6 +206,7 @@ impl App {
 
                         KeyCode::Esc => {
                             self.mode = Mode::Normal;
+                            self.selected_interface = InterfaceSelected::All;
                         }
                         _ => {}
                     },

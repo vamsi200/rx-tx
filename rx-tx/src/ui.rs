@@ -14,16 +14,10 @@ use ratatui::symbols;
 use ratatui::symbols::scrollbar;
 use ratatui::text::{Line, Masked, Span};
 use ratatui::widgets::block::title;
-use ratatui::widgets::Axis;
-use ratatui::widgets::BorderType;
-use ratatui::widgets::Borders;
-use ratatui::widgets::Chart;
-use ratatui::widgets::Dataset;
-use ratatui::widgets::List;
-use ratatui::widgets::ListItem;
-use ratatui::widgets::ListState;
-use ratatui::widgets::Tabs;
-use ratatui::widgets::Widget;
+use ratatui::widgets::{
+    Axis, BorderType, Borders, Chart, Dataset, HighlightSpacing, List, ListItem, ListState, Tabs,
+    Widget,
+};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
@@ -38,36 +32,65 @@ use std::vec;
 pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkStats>) {
     let area = frame.area();
 
-    let block = |title: &'static str| {
+    let it_block = |title: &'static str| {
         Block::bordered()
             .border_type(BorderType::Rounded)
-            .green()
-            .title(title.bold())
+            .border_style(Style::default().fg(Color::Green))
+            .title(title.bold().into_centered_line())
     };
-    let r_block = |title: &'static str| {
+    let r_block = |title: String| {
         Block::bordered()
             .border_type(BorderType::Rounded)
             .blue()
             .title(title.bold())
     };
-    let t_block = |title: &'static str| {
+    let t_block = |title: String| {
         Block::bordered()
             .border_type(BorderType::Rounded)
             .red()
             .title(title.bold())
     };
 
-    let chunks = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Percentage(50),
-        Constraint::Percentage(50),
-    ])
-    .split(area);
+    let chunks = if !app.is_full_screen {
+        Layout::vertical([
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
+            Constraint::Length(1),
+        ])
+        .split(area)
+    } else {
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area)
+    };
 
-    let tab_part = chunks[0];
-    let data_part = chunks[1];
-    let graph_part = chunks[2];
+    let data_part = chunks[0];
+    let graph_part = chunks[1];
 
+    if !app.is_full_screen {
+        let status_bar_part = chunks[2];
+        let tab_titles = Tab::titles();
+        let mut spans = Vec::new();
+
+        for title in tab_titles.iter() {
+            spans.push(Span::styled(
+                format!(" {} ", title),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw(" | "));
+        }
+        spans.push(Span::styled(
+            "e: fullscreen",
+            Style::default().fg(Color::DarkGray),
+        ));
+        spans.push(Span::raw(" | "));
+        spans.push(Span::styled(
+            "q: quit",
+            Style::default().fg(Color::DarkGray),
+        ));
+        let status_bar = Paragraph::new(Line::from(spans)).alignment(Alignment::Center);
+        frame.render_widget(status_bar, status_bar_part);
+    }
     let split_graph = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(graph_part);
     let top_chunks = Layout::horizontal([
@@ -85,32 +108,25 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
 
     let rx_para = Paragraph::new(get_network_receive_data(app, data))
         .white()
-        .block(r_block("Received"))
+        .block(r_block("Received".to_string()))
         .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
 
     let tx_para = Paragraph::new(get_network_transmit_data(app, data))
         .white()
-        .block(t_block("Transmit"))
+        .block(t_block("Transmit".to_string()))
         .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
-
-    let titles: Vec<_> = Tab::titles().iter().map(|&s| s).collect();
-    let tab =
-        Tabs::new(titles).block(Block::default().style(Style::default().fg(Color::LightYellow)));
-
-    frame.render_widget(tab, tab_part);
 
     let interface_names: Vec<String> = data
         .iter()
         .map(|interface| interface.name.clone())
         .collect();
 
-    let (list_items, block_title, mut state) = match &app.mode {
+    match &app.mode {
         app::Mode::SelectingInterface { filter, index } => {
             let filtered: Vec<_> = interface_names
                 .iter()
                 .filter(|s| s.contains(filter))
                 .collect();
-
             let items: Vec<ListItem> = filtered
                 .iter()
                 .map(|x| ListItem::new(format!(" {}", x)))
@@ -118,51 +134,56 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
 
             let mut state = ListState::default();
             if !filtered.is_empty() {
-                let s = (*index).min(filtered.len().saturating_sub(1));
-                state.select(Some(s));
+                let sel = (*index).min(filtered.len() - 1);
+                state.select(Some(sel));
             }
-            (items, "Select Interface", state)
-        }
-        app::Mode::Normal => {
-            let state = ListState::default();
-            let items: Vec<ListItem> = interface_names
-                .iter()
-                .map(|x| ListItem::new(format!(" {}", x)))
-                .collect();
-
-            (items, "Interface", state)
-        }
-    };
-
-    let mut list = List::new(list_items)
-        .block(block(block_title))
-        .style(Style::default().fg(Color::White));
-    match &app.mode {
-        app::Mode::SelectingInterface { .. } => {
-            list = list
-                .highlight_symbol(">>")
-                .highlight_style(Style::default().fg(Color::White))
-                .highlight_spacing(ratatui::widgets::HighlightSpacing::Always);
-
+            let list = List::new(items)
+                .block(it_block("Select Interface"))
+                .highlight_symbol(">> ")
+                .highlight_style(Style::default().fg(Color::Yellow))
+                .highlight_spacing(HighlightSpacing::Always);
             frame.render_stateful_widget(list, interface_rect, &mut state);
         }
-        app::Mode::Normal => {
-            frame.render_widget(list, interface_rect);
-        }
+
+        app::Mode::Normal => match &app.selected_interface {
+            app::InterfaceSelected::Interface(name) => {
+                let i_name = app.interface_name.clone();
+
+                //TODO: have to think other design, rather thaan whatever this is
+                let it_para = Paragraph::new(i_name)
+                    .white()
+                    .block(it_block("Interface"))
+                    .alignment(Alignment::Center);
+
+                frame.render_widget(it_para, interface_rect);
+            }
+            app::InterfaceSelected::All => {
+                let items: Vec<ListItem> = interface_names
+                    .iter()
+                    .map(|x| ListItem::new(format!(" {}", x)))
+                    .collect();
+                let list = List::new(items)
+                    .block(it_block("Interface(f)"))
+                    .style(Style::default().fg(Color::White));
+                frame.render_widget(list, interface_rect);
+            }
+        },
     }
+
+    let interface_name = app.interface_name.clone();
 
     match &app.selected_interface {
         app::InterfaceSelected::Interface(it) => {
             let rx_para = Paragraph::new(get_selected_network_receive_data(app, data))
                 .white()
-                .block(r_block("Received"))
+                .block(r_block(interface_name.clone()))
                 .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
 
             frame.render_widget(rx_para, rx_rect);
 
             let tx_para = Paragraph::new(get_selected_network_transmit_data(app, data))
                 .white()
-                .block(t_block("Transmit"))
+                .block(t_block(interface_name))
                 .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
 
             frame.render_widget(tx_para, tx_rect);

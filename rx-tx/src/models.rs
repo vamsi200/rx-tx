@@ -1,6 +1,6 @@
 use crate::app::{App, ByteUnit};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkStats {
     pub name: String,
     pub receive: Receive,
@@ -19,7 +19,7 @@ pub struct Receive {
     pub multicast: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transmit {
     pub bytes: u64,
     pub packets: u64,
