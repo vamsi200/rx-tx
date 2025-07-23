@@ -29,6 +29,7 @@ use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::format;
 use std::ops::Sub;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -72,9 +73,9 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
     let top_chunks = Layout::horizontal([
         Constraint::Percentage(20),
         Constraint::Length(1),
-        Constraint::Percentage(38),
+        Constraint::Percentage(39),
         Constraint::Length(1),
-        Constraint::Percentage(40),
+        Constraint::Percentage(39),
     ])
     .split(data_part);
 
@@ -91,9 +92,6 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         .white()
         .block(t_block("Transmit"))
         .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
-
-    frame.render_widget(rx_para, rx_rect);
-    frame.render_widget(tx_para, tx_rect);
 
     let titles: Vec<_> = Tab::titles().iter().map(|&s| s).collect();
     let tab =
@@ -153,11 +151,60 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         }
     }
 
+    match &app.selected_interface {
+        app::InterfaceSelected::Interface(it) => {
+            let rx_para = Paragraph::new(get_selected_network_receive_data(app, data))
+                .white()
+                .block(r_block("Received"))
+                .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
+
+            frame.render_widget(rx_para, rx_rect);
+
+            let tx_para = Paragraph::new(get_selected_network_transmit_data(app, data))
+                .white()
+                .block(t_block("Transmit"))
+                .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
+
+            frame.render_widget(tx_para, tx_rect);
+        }
+        app::InterfaceSelected::All => {
+            frame.render_widget(rx_para, rx_rect);
+            frame.render_widget(tx_para, tx_rect);
+        }
+    }
+
     frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("│")
-            .begin_symbol(Some("⇧"))
-            .end_symbol(Some("⇩")),
+            .thumb_symbol("▌")
+            .begin_symbol(Some("^"))
+            .end_symbol(Some("v"))
+            .track_symbol(Some("·")),
+        interface_rect.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut app.vertical_scroll_state,
+    );
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
+            .thumb_symbol("─")
+            .begin_symbol(Some("«"))
+            .end_symbol(Some("»"))
+            .track_symbol(Some("·")),
+        interface_rect.inner(Margin {
+            vertical: 0,
+            horizontal: 1,
+        }),
+        &mut app.horizontal_scroll_state,
+    );
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .thumb_symbol("▌")
+            .begin_symbol(Some("^"))
+            .end_symbol(Some("v"))
+            .track_symbol(Some("·")),
         rx_rect.inner(Margin {
             vertical: 1,
             horizontal: 0,
@@ -166,13 +213,44 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
     );
 
     frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
+            .thumb_symbol("─")
+            .begin_symbol(Some("«"))
+            .end_symbol(Some("»"))
+            .track_symbol(Some("·")),
+        rx_rect.inner(Margin {
+            vertical: 0,
+            horizontal: 1,
+        }),
+        &mut app.horizontal_scroll_state,
+    );
+
+    frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("│")
-            .begin_symbol(Some("⇧"))
-            .end_symbol(Some("⇩")),
-        tx_rect,
+            .thumb_symbol("▌")
+            .begin_symbol(Some("^"))
+            .end_symbol(Some("v"))
+            .track_symbol(Some("·")),
+        tx_rect.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
         &mut app.vertical_scroll_state,
     );
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
+            .thumb_symbol("─")
+            .begin_symbol(Some("«"))
+            .end_symbol(Some("»"))
+            .track_symbol(Some("·")),
+        tx_rect.inner(Margin {
+            vertical: 0,
+            horizontal: 1,
+        }),
+        &mut app.horizontal_scroll_state,
+    );
+
     draw_rx_graph(app, frame, split_graph[0]);
     draw_tx_graph(app, frame, split_graph[1]);
 }

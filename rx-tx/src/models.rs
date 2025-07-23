@@ -7,7 +7,7 @@ pub struct NetworkStats {
     pub transmit: Transmit,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Receive {
     pub bytes: u64,
     pub packets: u64,

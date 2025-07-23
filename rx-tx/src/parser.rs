@@ -110,6 +110,58 @@ pub fn get_network_receive_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) ->
     lines
 }
 
+pub fn get_selected_network_receive_data<'a>(
+    app: &mut App,
+    stats: &Vec<NetworkStats>,
+) -> Vec<Line<'a>> {
+    let interface_name = app.interface_name.clone();
+    let raw_bytes = app.raw_bytes;
+
+    stats
+        .iter()
+        .filter(move |x| x.name == interface_name)
+        .flat_map(|x| {
+            let display_value = x.receive.display(raw_bytes, app);
+            vec![
+                Line::from(format!(" bytes: {}", display_value)),
+                Line::from(format!(" packets: {}", x.receive.packets)),
+                Line::from(format!(" errs: {}", x.receive.errs)),
+                Line::from(format!(" drop: {}", x.receive.drop)),
+                Line::from(format!(" fifo: {}", x.receive.fifo)),
+                Line::from(format!(" frame: {}", x.receive.frame)),
+                Line::from(format!(" compressed: {}", x.receive.compressed)),
+                Line::from(format!(" multicast: {}", x.receive.multicast)),
+            ]
+        })
+        .collect()
+}
+
+pub fn get_selected_network_transmit_data<'a>(
+    app: &mut App,
+    stats: &Vec<NetworkStats>,
+) -> Vec<Line<'a>> {
+    let interface_name = app.interface_name.clone();
+    let raw_bytes = app.raw_bytes;
+
+    stats
+        .iter()
+        .filter(move |x| x.name == interface_name)
+        .flat_map(|x| {
+            let display_value = x.transmit.display(raw_bytes, app);
+            vec![
+                Line::from(format!(" bytes: {}", display_value)),
+                Line::from(format!(" packets: {}", x.transmit.packets)),
+                Line::from(format!(" errs: {}", x.transmit.errs)),
+                Line::from(format!(" drop: {}", x.transmit.drop)),
+                Line::from(format!(" fifo: {}", x.transmit.fifo)),
+                Line::from(format!(" frame: {}", x.transmit.colls)),
+                Line::from(format!(" compressed: {}", x.transmit.carrier)),
+                Line::from(format!(" multicast: {}", x.transmit.compressed)),
+            ]
+        })
+        .collect()
+}
+
 pub fn get_network_transmit_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()

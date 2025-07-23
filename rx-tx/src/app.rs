@@ -105,9 +105,10 @@ impl App {
             .iter()
             .map(|s| s.name.clone())
             .collect();
+
         let new_len = interface_name_vec.len();
-        self.vertical_scroll = 0;
-        self.vertical_scroll_state = ScrollbarState::new(new_len).position(0);
+        self.vertical_scroll_state = self.vertical_scroll_state.content_length(new_len);
+        self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(new_len);
 
         loop {
             let now = self.start_time.elapsed().as_secs_f64();
@@ -122,7 +123,7 @@ impl App {
 
                     match &mut self.selected_interface {
                         InterfaceSelected::All => {
-                            self.interface_name = "All".to_string();
+                            self.interface_name = String::from("All");
                             self.rx_data.push((now, rx_delta as f64));
                             self.tx_data.push((now, tx_delta as f64));
                         }
