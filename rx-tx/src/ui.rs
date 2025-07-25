@@ -65,9 +65,9 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
 
     let data_part = chunks[0];
     let graph_part = chunks[1];
+    let status_bar_part = chunks[2];
 
     if !app.is_full_screen {
-        let status_bar_part = chunks[2];
         let tab_titles = Tab::titles();
         let mut spans = Vec::new();
 
@@ -93,7 +93,7 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         ));
         let paragraph = if app.enter_tick_active {
             Paragraph::new(Line::from(vec![
-                Span::styled("Tick Rate (in ms): ", Style::default().fg(Color::LightBlue)),
+                Span::styled("> Tick Rate: ", Style::default().fg(Color::LightBlue)),
                 Span::raw(app.tick_value.as_str()),
             ]))
             .alignment(Alignment::Left)
@@ -111,6 +111,18 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
                 spans.push(Span::raw(" | "));
             }
 
+            let tick_millis = app.tick_rate.as_millis();
+            let tick_display = if tick_millis >= 1000 {
+                format!("Tick(k): {:.1}s", (tick_millis as f64) / 1000.0)
+            } else {
+                format!("Tick(k): {}ms", tick_millis)
+            };
+            spans.push(Span::styled(
+                tick_display,
+                Style::default().fg(Color::LightBlue),
+            ));
+            spans.push(Span::raw(" | "));
+
             spans.push(Span::styled(
                 "e: fullscreen",
                 Style::default().fg(Color::DarkGray),
@@ -123,17 +135,6 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
             ));
 
             spans.push(Span::raw(" | "));
-            let tick_millis = app.tick_rate.as_millis();
-            let tick_display = if tick_millis >= 1000 {
-                format!("Tick(k): {:.1}s", (tick_millis as f64) / 1000.0)
-            } else {
-                format!("Tick(k): {}ms", tick_millis)
-            };
-            spans.push(Span::styled(
-                tick_display,
-                Style::default().fg(Color::LightBlue),
-            ));
-
             Paragraph::new(Line::from(spans)).alignment(Alignment::Center)
         };
 
