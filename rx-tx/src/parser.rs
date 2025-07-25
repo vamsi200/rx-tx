@@ -2,7 +2,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use crate::app::App;
-use crate::models::*;
+use crate::models::{self, *};
 use anyhow::{anyhow, Error, Ok, Result};
 use core::net;
 use crossterm::event::{self, Event};
@@ -19,7 +19,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
 use std::thread::{self, sleep};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::vec;
 
 pub fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
@@ -116,6 +116,7 @@ pub fn get_selected_network_receive_data<'a>(
 ) -> Vec<Line<'a>> {
     let interface_name = app.interface_name.clone();
     let raw_bytes = app.raw_bytes;
+    let speed = speed_kachow(app.rx_data.clone()).unwrap();
 
     stats
         .iter()
@@ -123,6 +124,7 @@ pub fn get_selected_network_receive_data<'a>(
         .flat_map(|x| {
             let display_value = x.receive.display(raw_bytes, app);
             vec![
+                Line::from(format!(" speed: {}", speed)),
                 Line::from(format!(" bytes: {}", display_value)),
                 Line::from(format!(" packets: {}", x.receive.packets)),
                 Line::from(format!(" errs: {}", x.receive.errs)),
@@ -142,6 +144,7 @@ pub fn get_selected_network_transmit_data<'a>(
 ) -> Vec<Line<'a>> {
     let interface_name = app.interface_name.clone();
     let raw_bytes = app.raw_bytes;
+    let speed = speed_kachow(app.tx_data.clone()).unwrap();
 
     stats
         .iter()
@@ -149,6 +152,7 @@ pub fn get_selected_network_transmit_data<'a>(
         .flat_map(|x| {
             let display_value = x.transmit.display(raw_bytes, app);
             vec![
+                Line::from(format!(" speed: {}", speed)),
                 Line::from(format!(" bytes: {}", display_value)),
                 Line::from(format!(" packets: {}", x.transmit.packets)),
                 Line::from(format!(" errs: {}", x.transmit.errs)),
@@ -162,6 +166,34 @@ pub fn get_selected_network_transmit_data<'a>(
         .collect()
 }
 
+pub fn human_speed(bytes_per_sec: f64) -> (f64, &'static str) {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    const TB: f64 = GB * 1024.0;
+
+    if bytes_per_sec >= TB {
+        (bytes_per_sec / TB, "TB/s")
+    } else if bytes_per_sec >= GB {
+        (bytes_per_sec / GB, "GB/s")
+    } else if bytes_per_sec >= MB {
+        (bytes_per_sec / MB, "MB/s")
+    } else if bytes_per_sec >= KB {
+        (bytes_per_sec / KB, "KB/s")
+    } else {
+        (bytes_per_sec, "B/s")
+    }
+}
+pub fn speed_kachow(stats: Vec<(f64, f64)>) -> Option<String> {
+    //s = d2/t2-t1
+    let (t1, _) = stats[stats.len() - 2];
+    let (t2, d2) = stats[stats.len() - 1];
+    let dt = t2 - t1;
+    let speed = d2 as f64 / dt;
+
+    let (s, string) = human_speed(speed);
+    Some(format!("{:.2} {}", s, string))
+}
 pub fn get_network_transmit_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()

@@ -1,5 +1,6 @@
 use crate::app;
 use crate::app::*;
+use crate::models;
 use crate::models::*;
 use crate::parser::*;
 use anyhow::{anyhow, Error, Ok, Result};
@@ -42,13 +43,13 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         Block::bordered()
             .border_type(BorderType::Rounded)
             .blue()
-            .title(title.bold())
+            .title(title.bold().into_centered_line())
     };
     let t_block = |title: String| {
         Block::bordered()
             .border_type(BorderType::Rounded)
             .red()
-            .title(title.bold())
+            .title(title.bold().into_centered_line())
     };
 
     let chunks = if !app.is_full_screen {

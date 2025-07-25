@@ -103,7 +103,7 @@ impl Tab {
 
 impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        let tick_rate = Duration::from_millis(250);
+        let tick_rate = Duration::from_millis(500);
         let mut last_tick = Instant::now();
         let interface_name_vec: Vec<String> = parse_proc_net_dev()?
             .iter()

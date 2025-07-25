@@ -51,7 +51,7 @@ impl Transmit {
     }
 }
 
-fn format_bytes(data: u64, unit: &ByteUnit) -> String {
+pub fn format_bytes(data: u64, unit: &ByteUnit) -> String {
     match unit {
         ByteUnit::Binary => {
             const KB: f64 = 1024.0;
