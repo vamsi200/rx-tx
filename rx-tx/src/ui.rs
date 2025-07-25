@@ -80,18 +80,66 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
             ));
             spans.push(Span::raw(" | "));
         }
+
         spans.push(Span::styled(
             "e: fullscreen",
             Style::default().fg(Color::DarkGray),
         ));
         spans.push(Span::raw(" | "));
+
         spans.push(Span::styled(
             "q: quit",
             Style::default().fg(Color::DarkGray),
         ));
-        let status_bar = Paragraph::new(Line::from(spans)).alignment(Alignment::Center);
-        frame.render_widget(status_bar, status_bar_part);
+        let paragraph = if app.enter_tick_active {
+            Paragraph::new(Line::from(vec![
+                Span::styled("Tick Rate (in ms): ", Style::default().fg(Color::LightBlue)),
+                Span::raw(app.tick_value.as_str()),
+            ]))
+            .alignment(Alignment::Left)
+        } else {
+            let tab_titles = Tab::titles();
+            let mut spans = Vec::new();
+
+            for title in tab_titles.iter() {
+                spans.push(Span::styled(
+                    format!(" {} ", title),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::raw(" | "));
+            }
+
+            spans.push(Span::styled(
+                "e: fullscreen",
+                Style::default().fg(Color::DarkGray),
+            ));
+            spans.push(Span::raw(" | "));
+
+            spans.push(Span::styled(
+                "q: quit",
+                Style::default().fg(Color::DarkGray),
+            ));
+
+            spans.push(Span::raw(" | "));
+            let tick_millis = app.tick_rate.as_millis();
+            let tick_display = if tick_millis >= 1000 {
+                format!("Tick(k): {:.1}s", (tick_millis as f64) / 1000.0)
+            } else {
+                format!("Tick(k): {}ms", tick_millis)
+            };
+            spans.push(Span::styled(
+                tick_display,
+                Style::default().fg(Color::LightBlue),
+            ));
+
+            Paragraph::new(Line::from(spans)).alignment(Alignment::Center)
+        };
+
+        frame.render_widget(paragraph, status_bar_part);
     }
+
     let split_graph = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(graph_part);
     let top_chunks = Layout::horizontal([
@@ -122,31 +170,31 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
         .map(|interface| interface.name.clone())
         .collect();
 
-    match &app.mode {
-        app::Mode::SelectingInterface { filter, index } => {
-            let filtered: Vec<_> = interface_names
-                .iter()
-                .filter(|s| s.contains(filter))
-                .collect();
-            let items: Vec<ListItem> = filtered
-                .iter()
-                .map(|x| ListItem::new(format!(" {}", x)))
-                .collect();
+    if let app::Mode::SelectingInterface { filter, index } = &app.mode {
+        let filtered: Vec<_> = interface_names
+            .iter()
+            .filter(|s| s.contains(filter))
+            .collect();
+        let items: Vec<ListItem> = filtered
+            .iter()
+            .map(|x| ListItem::new(format!(" {}", x)))
+            .collect();
 
-            let mut state = ListState::default();
-            if !filtered.is_empty() {
-                let sel = (*index).min(filtered.len() - 1);
-                state.select(Some(sel));
-            }
-            let list = List::new(items)
-                .block(it_block("Select Interface"))
-                .highlight_symbol(">> ")
-                .highlight_style(Style::default().fg(Color::Yellow))
-                .highlight_spacing(HighlightSpacing::Always);
-            frame.render_stateful_widget(list, interface_rect, &mut state);
+        let mut state = ListState::default();
+        if !filtered.is_empty() {
+            let sel = (*index).min(filtered.len() - 1);
+            state.select(Some(sel));
         }
+        let list = List::new(items)
+            .block(it_block("Select Interface"))
+            .highlight_symbol(">> ")
+            .highlight_style(Style::default().fg(Color::Yellow))
+            .highlight_spacing(HighlightSpacing::Always);
+        frame.render_stateful_widget(list, interface_rect, &mut state);
+    }
 
-        app::Mode::Normal => match &app.selected_interface {
+    if let app::Mode::Normal = &app.mode {
+        match &app.selected_interface {
             app::InterfaceSelected::Interface(name) => {
                 let i_name = app.interface_name.clone();
 
@@ -168,9 +216,8 @@ pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkS
                     .style(Style::default().fg(Color::White));
                 frame.render_widget(list, interface_rect);
             }
-        },
+        }
     }
-
     let interface_name = app.interface_name.clone();
 
     match &app.selected_interface {

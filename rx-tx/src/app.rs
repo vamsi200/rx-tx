@@ -1,9 +1,10 @@
 use crate::models::*;
 use crate::parser::*;
 use crate::ui::*;
-use anyhow::{anyhow, Error, Ok, Result};
+use anyhow::{anyhow, Error, Result};
 use clap::builder::Str;
 use crossterm::event::{self, read, Event, KeyCode};
+use crossterm::style::SetStyle;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols::scrollbar;
@@ -14,6 +15,7 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::char;
+use std::result::Result::Ok;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
@@ -21,7 +23,10 @@ use std::vec;
 #[derive(Clone)]
 pub struct App {
     pub is_full_screen: bool,
+    pub enter_tick_active: bool,
     pub interface_name: String,
+    pub tick_rate: Duration,
+    pub tick_value: String,
     pub mode: Mode,
     pub selection_state: ListState,
     pub selected_interface: InterfaceSelected,
@@ -43,6 +48,9 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
+            tick_value: String::new(),
+            enter_tick_active: false,
+            tick_rate: Duration::from_millis(250),
             is_full_screen: false,
             interface_name: String::new(),
             selection_state: {
@@ -103,7 +111,6 @@ impl Tab {
 
 impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        let tick_rate = Duration::from_millis(500);
         let mut last_tick = Instant::now();
         let interface_name_vec: Vec<String> = parse_proc_net_dev()?
             .iter()
@@ -143,7 +150,7 @@ impl App {
             }
             self.prev_stats = Some(vec_stats);
 
-            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            let timeout = self.tick_rate.saturating_sub(last_tick.elapsed());
             if !event::poll(timeout)? {
                 last_tick = Instant::now();
                 continue;
@@ -158,6 +165,12 @@ impl App {
                                 index: 0,
                             }
                         }
+                        KeyCode::Char('k') => {
+                            self.enter_tick_active = true;
+                            self.tick_value.clear();
+                            continue;
+                        }
+
                         KeyCode::Char('e') => self.is_full_screen = !self.is_full_screen,
                         KeyCode::Char('q') => return Ok(()),
                         KeyCode::Left => self.scroll_left(),
@@ -188,7 +201,13 @@ impl App {
                             }
                         }
                         KeyCode::Down => {
-                            *index += 1;
+                            let filtered_len = interface_name_vec
+                                .iter()
+                                .filter(|&name| name.contains(&*filter))
+                                .count();
+                            if *index + 1 < filtered_len {
+                                *index += 1;
+                            }
                         }
 
                         KeyCode::Enter => {
@@ -210,6 +229,27 @@ impl App {
                         }
                         _ => {}
                     },
+                }
+                if self.enter_tick_active {
+                    match key.code {
+                        KeyCode::Char(c) => {
+                            self.tick_value.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            self.tick_value.pop();
+                        }
+                        KeyCode::Enter => {
+                            let value = self.tick_value.parse::<u64>();
+                            if let Ok(v) = value {
+                                self.tick_rate = Duration::from_millis(v);
+                            }
+                            self.enter_tick_active = false;
+                        }
+                        KeyCode::Esc => {
+                            self.enter_tick_active = false;
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
