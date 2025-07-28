@@ -14,6 +14,7 @@ mod ui;
 fn main() -> Result<()> {
     let mut terminal = ratatui::init();
     let mut app = App::default();
+    app.get_stuff(&mut terminal)?;
     app.run(&mut terminal)?;
     ratatui::restore();
     Ok(())
