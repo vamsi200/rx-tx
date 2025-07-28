@@ -152,13 +152,17 @@ impl App {
         self.vertical_scroll_state = self.vertical_scroll_state.content_length(new_len);
         self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(new_len);
 
-        let tick_rate = Duration::from_millis(250);
+        let tick_rate = self.tick_rate;
 
         loop {
             let latest_stats = self.prev_stats.clone().unwrap();
             let _ = terminal.draw(|frame| self.render(frame, &latest_stats));
 
-            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            let mut timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            if timeout == Duration::ZERO {
+                timeout = Duration::from_millis(5);
+            }
+
             if event::poll(timeout)? {
                 if let Event::Key(key) = event::read()? {
                     match &mut self.mode {
