@@ -99,10 +99,12 @@ pub fn get_network_receive_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) ->
         .iter()
         .flat_map(|interface| {
             let mut lines = vec![];
+            let sum = interface.receive.bytes + interface.transmit.bytes;
             lines.push(Line::from(format!(
-                " bytes: {}, packets: {}",
-                interface.receive.display(app.raw_bytes, app),
+                " bytes: {}, packets: {}, total: {}",
+                interface.receive.display(app.raw_bytes, app, None),
                 interface.receive.packets,
+                interface.receive.display(app.raw_bytes, app, Some(sum)),
             )));
             lines
         })
@@ -122,8 +124,11 @@ pub fn get_selected_network_receive_data<'a>(
         .iter()
         .filter(move |x| x.name == interface_name)
         .flat_map(|x| {
-            let display_value = x.receive.display(raw_bytes, app);
+            let display_value = x.receive.display(raw_bytes, app, None);
+            let sum = x.receive.bytes + x.transmit.bytes;
+            let total = x.receive.display(raw_bytes, app, Some(sum));
             vec![
+                Line::from(format!(" Total: {}", total)),
                 Line::from(format!(" speed: {}", speed)),
                 Line::from(format!(" bytes: {}", display_value)),
                 Line::from(format!(" packets: {}", x.receive.packets)),
@@ -150,8 +155,12 @@ pub fn get_selected_network_transmit_data<'a>(
         .iter()
         .filter(move |x| x.name == interface_name)
         .flat_map(|x| {
-            let display_value = x.transmit.display(raw_bytes, app);
+            let display_value = x.transmit.display(raw_bytes, app, None);
+            let sum = x.receive.bytes + x.transmit.bytes;
+            let total = x.transmit.display(raw_bytes, app, Some(sum));
+
             vec![
+                Line::from(format!(" Total: {}", total)),
                 Line::from(format!(" speed: {}", speed)),
                 Line::from(format!(" bytes: {}", display_value)),
                 Line::from(format!(" packets: {}", x.transmit.packets)),
@@ -198,11 +207,13 @@ pub fn get_network_transmit_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -
     let lines: Vec<Line> = stats
         .iter()
         .flat_map(|interface| {
+            let sum = interface.receive.bytes + interface.transmit.bytes;
             let mut lines = vec![];
             lines.push(Line::from(format!(
-                " bytes: {}, packets: {}",
-                interface.transmit.display(app.raw_bytes, app),
+                " bytes: {}, packets: {}, total: {}",
+                interface.transmit.display(app.raw_bytes, app, None),
                 interface.transmit.packets,
+                interface.transmit.display(app.raw_bytes, app, Some(sum)),
             )));
             lines
         })
