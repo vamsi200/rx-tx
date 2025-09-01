@@ -50,7 +50,7 @@ impl Default for App {
         Self {
             tick_value: String::new(),
             enter_tick_active: false,
-            tick_rate: Duration::from_millis(250),
+            tick_rate: Duration::from_millis(500),
             is_full_screen: false,
             interface_name: String::new(),
             selection_state: {
@@ -142,8 +142,6 @@ impl App {
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         let mut last_tick = Instant::now();
-        let mut should_exit = false;
-
         let interface_name_vec: Vec<String> = parse_proc_net_dev()?
             .iter()
             .map(|s| s.name.clone())
@@ -180,8 +178,7 @@ impl App {
                             }
                             KeyCode::Char('e') => self.is_full_screen = !self.is_full_screen,
                             KeyCode::Char('q') => {
-                                should_exit = true;
-                                continue;
+                                break;
                             }
                             KeyCode::Left => self.scroll_left(),
                             KeyCode::Down => self.scroll_down(),
@@ -228,6 +225,7 @@ impl App {
                                     self.selected_interface =
                                         InterfaceSelected::Interface(selected_interface.clone());
                                     self.mode = Mode::Normal;
+                                    self.get_stuff(terminal)?;
                                 }
                             }
                             KeyCode::Esc => {
@@ -263,10 +261,6 @@ impl App {
             if last_tick.elapsed() >= self.tick_rate {
                 self.get_stuff(terminal)?;
                 last_tick = Instant::now();
-            }
-
-            if should_exit {
-                break;
             }
         }
         Ok(())
