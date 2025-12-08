@@ -15,6 +15,9 @@ use ratatui::symbols;
 use ratatui::symbols::scrollbar;
 use ratatui::text::{Line, Masked, Span};
 use ratatui::widgets::block::title;
+use ratatui::widgets::Cell;
+use ratatui::widgets::Row;
+use ratatui::widgets::Table;
 use ratatui::widgets::{
     Axis, BorderType, Borders, Chart, Dataset, HighlightSpacing, List, ListItem, ListState, Tabs,
     Widget,
@@ -30,347 +33,762 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
-pub fn draw_interface_mode(app: &mut App, frame: &mut Frame, data: &Vec<NetworkStats>) {
+pub fn draw_interface_mode(
+    app: &mut App,
+    frame: &mut Frame,
+    data: &Vec<NetworkStats>,
+    tcp_data: &Vec<TcpStats>,
+) {
+    let byte_unit = app.byte_unit.clone();
     let area = frame.area();
 
-    let it_block = |title: &'static str| {
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Green))
-            .title(title.bold().into_centered_line())
-    };
-    let r_block = |title: String| {
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .blue()
-            .title(title.bold().into_centered_line())
-    };
-    let t_block = |title: String| {
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .red()
-            .title(title.bold().into_centered_line())
-    };
+    let chunks =
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
 
-    let chunks = if !app.is_full_screen {
-        Layout::vertical([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-            Constraint::Length(1),
-        ])
-        .split(area)
+    let main_part = chunks[0];
+    let tcp_area = chunks[1];
+
+    let interface_count = data.len();
+    let list_percentage = if interface_count <= 3 {
+        35
+    } else if interface_count <= 6 {
+        30
     } else {
-        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area)
+        25
     };
 
-    let data_part = chunks[0];
-    let graph_part = chunks[1];
-    let status_bar_part = chunks[2];
+    let main_split = Layout::horizontal([
+        Constraint::Percentage(list_percentage),
+        Constraint::Percentage(100 - list_percentage),
+    ])
+    .split(main_part);
 
-    if !app.is_full_screen {
-        let tab_titles = Tab::titles();
-        let mut spans = Vec::new();
+    let list_area = main_split[0];
+    let detail_area = main_split[1];
 
-        for title in tab_titles.iter() {
-            spans.push(Span::styled(
-                format!(" {} ", title),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::raw(" | "));
-        }
+    let rx_data_strings = get_network_receive_data(app, data);
+    let tx_data_lines = get_network_transmit_data(app, data);
 
-        spans.push(Span::styled(
-            "e: fullscreen",
-            Style::default().fg(Color::DarkGray),
-        ));
-        spans.push(Span::raw(" | "));
+    let interface_names: Vec<String> = data.iter().map(|i| i.name.clone()).collect();
 
-        spans.push(Span::styled(
-            "q: quit",
-            Style::default().fg(Color::DarkGray),
-        ));
-        let paragraph = if app.enter_tick_active {
-            Paragraph::new(Line::from(vec![
-                Span::styled("> Tick Rate: ", Style::default().fg(Color::LightBlue)),
-                Span::raw(app.tick_value.as_str()),
-            ]))
-            .alignment(Alignment::Left)
-        } else {
-            let tab_titles = Tab::titles();
-            let mut spans = Vec::new();
+    match &app.mode {
+        Mode::SelectingInterface { filter, index } => {
+            let filtered: Vec<_> = interface_names
+                .iter()
+                .enumerate()
+                .filter(|(_, name)| name.contains(filter))
+                .collect();
 
-            for title in tab_titles.iter() {
-                spans.push(Span::styled(
-                    format!(" {} ", title),
+            let items: Vec<ListItem> = filtered
+                .iter()
+                .enumerate()
+                .map(|(display_idx, (original_idx, name))| {
+                    let rx_speed_str = extract_speed_from_line(
+                        &rx_data_strings
+                            .get(*original_idx)
+                            .cloned()
+                            .unwrap_or(Line::from("0 B/s")),
+                    );
+                    let tx_speed_str = extract_speed_from_line(
+                        &tx_data_lines
+                            .get(*original_idx)
+                            .cloned()
+                            .unwrap_or(Line::from("0 B/s")),
+                    );
+
+                    let rx_load = parse_speed_for_bar(&rx_speed_str);
+                    let tx_load = parse_speed_for_bar(&tx_speed_str);
+                    let is_active = rx_load > 0.01 || tx_load > 0.01;
+
+                    let activity = if is_active {
+                        Span::styled(
+                            "⚡",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        Span::raw(" ")
+                    };
+
+                    ListItem::new(vec![Line::from(vec![
+                        Span::styled(
+                            format!("{:>2}.", display_idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
+                        activity,
+                    ])])
+                })
+                .collect();
+
+            let mut state = ListState::default();
+            if !filtered.is_empty() {
+                let sel = (*index).min(filtered.len() - 1);
+                state.select(Some(sel));
+            }
+
+            let list = List::new(items)
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(format!(" 🔍 Filter: {} ", filter))
+                        .title_style(
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                )
+                .highlight_symbol("➣ ")
+                .highlight_style(
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
-                ));
-                spans.push(Span::raw(" | "));
-            }
+                )
+                .highlight_spacing(HighlightSpacing::Always);
 
-            let tick_millis = app.tick_rate.as_millis();
-            let tick_display = if tick_millis >= 1000 {
-                format!("Tick(k): {:.1}s", (tick_millis as f64) / 1000.0)
-            } else {
-                format!("Tick(k): {}ms", tick_millis)
-            };
-            spans.push(Span::styled(
-                tick_display,
-                Style::default().fg(Color::LightBlue),
-            ));
-            spans.push(Span::raw(" | "));
+            frame.render_stateful_widget(list, list_area, &mut state);
 
-            spans.push(Span::styled(
-                "e: fullscreen",
-                Style::default().fg(Color::DarkGray),
-            ));
-            spans.push(Span::raw(" | "));
+            let mut scrollbar_state = ScrollbarState::new(filtered.len()).position(*index);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(Some("┊"))
+                    .thumb_symbol("┃"),
+                list_area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut scrollbar_state,
+            );
+        }
+        Mode::Normal => {
+            let items: Vec<ListItem> = interface_names
+                .iter()
+                .enumerate()
+                .map(|(idx, name)| {
+                    let rx_speed_str = extract_speed_from_line(
+                        &rx_data_strings
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or(Line::from("0 B/s")),
+                    );
+                    let tx_speed_str = extract_speed_from_line(
+                        &tx_data_lines
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or(Line::from("0 B/s")),
+                    );
 
-            spans.push(Span::styled(
-                "q: quit",
-                Style::default().fg(Color::DarkGray),
-            ));
+                    let rx_load = parse_speed_for_bar(&rx_speed_str);
+                    let tx_load = parse_speed_for_bar(&tx_speed_str);
+                    let is_active = rx_load > 0.01 || tx_load > 0.01;
 
-            spans.push(Span::raw(" | "));
-            Paragraph::new(Line::from(spans)).alignment(Alignment::Center)
-        };
+                    let activity = if is_active {
+                        Span::styled(
+                            "⚡",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        Span::raw(" ")
+                    };
 
-        frame.render_widget(paragraph, status_bar_part);
+                    ListItem::new(vec![Line::from(vec![
+                        Span::styled(
+                            format!("{:>2}.", idx + 1),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
+                        activity,
+                    ])])
+                })
+                .collect();
+
+            let mut state = ListState::default();
+            state.select(Some(app.vertical_scroll));
+
+            let list = List::new(items).block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title(format!(" 📡 INTERFACES ({}) ", interface_count))
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+            );
+
+            frame.render_stateful_widget(list, list_area, &mut state);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(Some("┊"))
+                    .thumb_symbol("┃"),
+                list_area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut app.vertical_scroll_state,
+            );
+        }
     }
 
-    let split_graph = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(graph_part);
-    let top_chunks = Layout::horizontal([
-        Constraint::Percentage(20),
-        Constraint::Length(1),
-        Constraint::Percentage(39),
-        Constraint::Length(1),
-        Constraint::Percentage(39),
-    ])
-    .split(data_part);
+    match app.selected_interface.clone() {
+        InterfaceSelected::Interface(selected_name) => {
+            if let Some(interface_data) = data.iter().find(|i| i.name == selected_name) {
+                let idx = data.iter().position(|i| i.name == selected_name).unwrap();
 
-    let interface_rect = top_chunks[0];
-    let rx_rect = top_chunks[2];
-    let tx_rect = top_chunks[4];
+                let rx_speed_str = extract_speed_from_line(
+                    &rx_data_strings
+                        .get(idx)
+                        .cloned()
+                        .unwrap_or(Line::from("0 B/s")),
+                );
+                let tx_speed_str = extract_speed_from_line(
+                    &tx_data_lines
+                        .get(idx)
+                        .cloned()
+                        .unwrap_or(Line::from("0 B/s")),
+                );
 
-    let rx_para = Paragraph::new(get_network_receive_data(app, data))
-        .white()
-        .block(r_block("Received".to_string()))
-        .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
+                let bar_width = (detail_area.width as usize).saturating_sub(30);
+                let rx_load = parse_speed_for_bar(&rx_speed_str);
+                let tx_load = parse_speed_for_bar(&tx_speed_str);
 
-    let tx_para = Paragraph::new(get_network_transmit_data(app, data))
-        .white()
-        .block(t_block("Transmit".to_string()))
-        .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
+                let detail_chunks = Layout::vertical([
+                    Constraint::Length(5),
+                    Constraint::Length(5),
+                    Constraint::Fill(1),
+                ])
+                .split(detail_area);
 
-    let interface_names: Vec<String> = data
+                let rx_current = parse_speed_to_mbps(&rx_speed_str);
+                let tx_current = parse_speed_to_mbps(&tx_speed_str);
+
+                let rx_peak = app
+                    .rx_peak_speed
+                    .entry(selected_name.clone())
+                    .or_insert(0.0);
+                if rx_current > *rx_peak {
+                    *rx_peak = rx_current;
+                }
+                let tx_peak = app
+                    .tx_peak_speed
+                    .entry(selected_name.clone())
+                    .or_insert(0.0);
+                if tx_current > *tx_peak {
+                    *tx_peak = tx_current;
+                }
+
+                let rx_avg = app.rx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
+                let tx_avg = app.tx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
+
+                *rx_avg = (*rx_avg * 0.95) + (rx_current * 0.05);
+                *tx_avg = (*tx_avg * 0.95) + (tx_current * 0.05);
+
+                let rx_peak_str = format_speed_mbps(*rx_peak);
+                let rx_avg_str = format_speed_mbps(*rx_avg);
+                let tx_peak_str = format_speed_mbps(*tx_peak);
+                let tx_avg_str = format_speed_mbps(*tx_avg);
+
+                let rx_para = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(
+                            make_bar(rx_load, bar_width),
+                            Style::default().fg(Color::Green),
+                        ),
+                        Span::raw(" ▼"),
+                    ]),
+                    Line::from(""),
+                ])
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(vec![
+                            Span::styled(
+                                " 📥 RX ",
+                                Style::default()
+                                    .fg(Color::Green)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Cur: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("{:<10}", rx_speed_str),
+                                Style::default()
+                                    .fg(Color::Green)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Peak: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("{:<10}", rx_peak_str),
+                                Style::default().fg(Color::Yellow),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Avg: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(rx_avg_str, Style::default().fg(Color::Cyan)),
+                            Span::raw(" "),
+                        ])
+                        .green(),
+                );
+                frame.render_widget(rx_para, detail_chunks[0]);
+                let tx_para = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(
+                            make_bar(tx_load, bar_width),
+                            Style::default().fg(Color::Blue),
+                        ),
+                        Span::raw(" ▲"),
+                    ]),
+                    Line::from(""),
+                ])
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(vec![
+                            Span::styled(
+                                " 📤 TX ",
+                                Style::default()
+                                    .fg(Color::Blue)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Cur: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("{:<10}", tx_speed_str),
+                                Style::default()
+                                    .fg(Color::Blue)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Peak: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                format!("{:<10}", tx_peak_str),
+                                Style::default().fg(Color::Yellow),
+                            ),
+                            Span::raw(" │ "),
+                            Span::styled("Avg: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(tx_avg_str, Style::default().fg(Color::Cyan)),
+                            Span::raw(" "),
+                        ])
+                        .blue(),
+                );
+                frame.render_widget(tx_para, detail_chunks[1]);
+
+                let total = interface_data.receive.bytes + interface_data.transmit.bytes;
+                let total_str = interface_data.receive.display(app, Some(total));
+                let rx_bytes_str = interface_data.receive.display(app, None);
+                let tx_bytes_str = interface_data.transmit.display(app, None);
+
+                let stats_columns = Layout::horizontal([
+                    Constraint::Percentage(33),
+                    Constraint::Percentage(33),
+                    Constraint::Percentage(34),
+                ])
+                .split(detail_chunks[2]);
+
+                let left_col = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  Name:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            &interface_data.name,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Total: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(total_str, Style::default().fg(Color::Yellow)),
+                    ]),
+                ])
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(" INFO ")
+                        .cyan(),
+                );
+
+                let middle_col = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  Bytes:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(rx_bytes_str, Style::default().fg(Color::White)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Packets: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.packets),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Errors:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.errs),
+                            if interface_data.receive.errs > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Drops:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.drop),
+                            if interface_data.receive.drop > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                ])
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(" 📥 RX ")
+                        .green(),
+                );
+
+                let right_col = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  Bytes:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(tx_bytes_str, Style::default().fg(Color::White)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Packets: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.packets),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Errors:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.errs),
+                            if interface_data.transmit.errs > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Drops:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.drop),
+                            if interface_data.transmit.drop > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                ])
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title(" 📤 TX ")
+                        .blue(),
+                );
+
+                frame.render_widget(left_col, stats_columns[0]);
+                frame.render_widget(middle_col, stats_columns[1]);
+                frame.render_widget(right_col, stats_columns[2]);
+            }
+        }
+        InterfaceSelected::All => {
+            let total_rx: u64 = data.iter().map(|i| i.receive.bytes).sum();
+            let total_tx: u64 = data.iter().map(|i| i.transmit.bytes).sum();
+            let total_packets: u64 = data.iter().map(|i| i.receive.packets).sum();
+            let summary_tx_val = if app.raw_bytes {
+                total_tx.to_string()
+            } else {
+                format_bytes(total_tx, &byte_unit)
+            };
+            let summary_rx_val = if app.raw_bytes {
+                total_rx.to_string()
+            } else {
+                format_bytes(total_rx, &byte_unit)
+            };
+
+            let summary = Paragraph::new(vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    "  ALL INTERFACES",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("  Total RX:      ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(summary_rx_val, Style::default().fg(Color::Green)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  Total TX:      ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(summary_tx_val, Style::default().fg(Color::Blue)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  Total Packets: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}", total_packets),
+                        Style::default().fg(Color::White),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "  💡 Select an interface for details",
+                    Style::default().fg(Color::DarkGray).italic(),
+                )),
+            ])
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title(" 📊 OVERVIEW ")
+                    .cyan(),
+            )
+            .alignment(Alignment::Left);
+
+            frame.render_widget(summary, detail_area);
+        }
+    }
+
+    let tcp_rows: Vec<Row> = tcp_data
         .iter()
-        .map(|interface| interface.name.clone())
+        .map(|conn| {
+            let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
+            let remote_addr = format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
+            let state = tcp_state_name(conn.state);
+            let timer = format_timer(conn.timer_active);
+
+            let state_style = match state {
+                "ESTABLISHED" => Style::default().fg(Color::Green),
+                "LISTEN" => Style::default().fg(Color::Cyan),
+                "TIME_WAIT" => Style::default().fg(Color::Yellow),
+                "CLOSE_WAIT" => Style::default().fg(Color::Magenta),
+                "SYN_SENT" | "SYN_RECV" => Style::default().fg(Color::Blue),
+                "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(Color::LightYellow),
+                _ => Style::default().fg(Color::White),
+            };
+
+            let queue_style = if conn.tx_queue > 0 || conn.rx_queue > 0 {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
+            let timer_style = if conn.timer_active > 0 {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
+            Row::new(vec![
+                Cell::from(format!("{}", conn.sl)),
+                Cell::from(local_addr),
+                Cell::from(remote_addr),
+                Cell::from(Span::styled(state, state_style)),
+                Cell::from(Span::styled(
+                    format!("{}:{}", conn.tx_queue, conn.rx_queue),
+                    queue_style,
+                )),
+                Cell::from(Span::styled(timer, timer_style)),
+                Cell::from(format!("{}", conn.timer_when)),
+                Cell::from(format!("{}", conn.retransmit_timeout)),
+                Cell::from(format!("{}", conn.uid)),
+                Cell::from(format!("{}", conn.timeout)),
+                Cell::from(format!("{}", conn.inode)),
+            ])
+        })
         .collect();
 
-    if let app::Mode::SelectingInterface { filter, index } = &app.mode {
-        let filtered: Vec<_> = interface_names
-            .iter()
-            .filter(|s| s.contains(filter))
-            .collect();
-        let items: Vec<ListItem> = filtered
-            .iter()
-            .map(|x| ListItem::new(format!(" {}", x)))
-            .collect();
-
-        let mut state = ListState::default();
-        if !filtered.is_empty() {
-            let sel = (*index).min(filtered.len() - 1);
-            state.select(Some(sel));
-        }
-        let list = List::new(items)
-            .block(it_block("Select Interface"))
-            .highlight_symbol(">> ")
-            .highlight_style(Style::default().fg(Color::Yellow))
-            .highlight_spacing(HighlightSpacing::Always);
-        frame.render_stateful_widget(list, interface_rect, &mut state);
-    }
-
-    if let app::Mode::Normal = &app.mode {
-        match &app.selected_interface {
-            app::InterfaceSelected::Interface(name) => {
-                let i_name = app.interface_name.clone();
-
-                //TODO: have to think other design, rather thaan whatever this is
-                let it_para = Paragraph::new(i_name)
-                    .white()
-                    .block(it_block("Interface"))
-                    .alignment(Alignment::Center);
-
-                frame.render_widget(it_para, interface_rect);
-            }
-            app::InterfaceSelected::All => {
-                let items: Vec<ListItem> = interface_names
-                    .iter()
-                    .map(|x| ListItem::new(format!(" {}", x)))
-                    .collect();
-                let list = List::new(items)
-                    .block(it_block("Interface(f)"))
-                    .style(Style::default().fg(Color::White));
-                frame.render_widget(list, interface_rect);
-            }
-        }
-    }
-    let interface_name = app.interface_name.clone();
-
-    match &app.selected_interface {
-        app::InterfaceSelected::Interface(it) => {
-            let rx_para = Paragraph::new(get_selected_network_receive_data(app, data))
-                .white()
-                .block(r_block(interface_name.clone()))
-                .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
-
-            frame.render_widget(rx_para, rx_rect);
-
-            let tx_para = Paragraph::new(get_selected_network_transmit_data(app, data))
-                .white()
-                .block(t_block(interface_name))
-                .scroll((app.vertical_scroll as u16, app.horizontal_scroll as u16));
-
-            frame.render_widget(tx_para, tx_rect);
-        }
-        app::InterfaceSelected::All => {
-            frame.render_widget(rx_para, rx_rect);
-            frame.render_widget(tx_para, tx_rect);
-        }
-    }
-
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("▌")
-            .begin_symbol(Some("^"))
-            .end_symbol(Some("v"))
-            .track_symbol(Some("·")),
-        interface_rect.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        }),
-        &mut app.vertical_scroll_state,
+    let tcp_table = Table::new(
+        tcp_rows,
+        [
+            Constraint::Length(4),      // sl
+            Constraint::Percentage(20), // local_address
+            Constraint::Percentage(20), // remote_address
+            Constraint::Length(15),     // state
+            Constraint::Length(12),     // tx:rx
+            Constraint::Length(10),     // timer
+            Constraint::Length(10),     // when
+            Constraint::Length(10),     // retrnsmt
+            Constraint::Length(10),     // uid
+            Constraint::Length(10),     // timeout
+            Constraint::Fill(1),        // inode
+        ],
+    )
+    .header(
+        Row::new(vec![
+            Cell::from("Sl"),
+            Cell::from("Local Address"),
+            Cell::from("Remote Address"),
+            Cell::from("State"),
+            Cell::from("TX:RX"),
+            Cell::from("Timer"),
+            Cell::from("When"),
+            Cell::from("Retrns"),
+            Cell::from("UID"),
+            Cell::from("Timeout"),
+            Cell::from("Inode"),
+        ])
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .bottom_margin(1),
+    )
+    .block(
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .title(format!(" 🔌 TCP CONNECTIONS ({}) ", tcp_data.len()))
+            .title_style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
     );
 
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
-            .thumb_symbol("─")
-            .begin_symbol(Some("«"))
-            .end_symbol(Some("»"))
-            .track_symbol(Some("·")),
-        interface_rect.inner(Margin {
-            vertical: 0,
-            horizontal: 1,
-        }),
-        &mut app.horizontal_scroll_state,
-    );
-
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("▌")
-            .begin_symbol(Some("^"))
-            .end_symbol(Some("v"))
-            .track_symbol(Some("·")),
-        rx_rect.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        }),
-        &mut app.vertical_scroll_state,
-    );
-
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
-            .thumb_symbol("─")
-            .begin_symbol(Some("«"))
-            .end_symbol(Some("»"))
-            .track_symbol(Some("·")),
-        rx_rect.inner(Margin {
-            vertical: 0,
-            horizontal: 1,
-        }),
-        &mut app.horizontal_scroll_state,
-    );
-
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("▌")
-            .begin_symbol(Some("^"))
-            .end_symbol(Some("v"))
-            .track_symbol(Some("·")),
-        tx_rect.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        }),
-        &mut app.vertical_scroll_state,
-    );
-
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
-            .thumb_symbol("─")
-            .begin_symbol(Some("«"))
-            .end_symbol(Some("»"))
-            .track_symbol(Some("·")),
-        tx_rect.inner(Margin {
-            vertical: 0,
-            horizontal: 1,
-        }),
-        &mut app.horizontal_scroll_state,
-    );
-
-    draw_rx_graph(app, frame, split_graph[0]);
-    draw_tx_graph(app, frame, split_graph[1]);
+    frame.render_widget(tcp_table, tcp_area);
 }
 
-pub fn draw_rx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
-    let rx_max = app.rx_data.iter().map(|&(_, y)| y).fold(0.0, f64::max);
-
-    let datasets = vec![Dataset::default()
-        .name(app.interface_name.clone())
-        .marker(symbols::Marker::Block)
-        .style(Style::default().fg(Color::Blue))
-        .graph_type(ratatui::widgets::GraphType::Bar)
-        .data(&app.rx_data)];
-
-    let chart = Chart::new(datasets)
-        .block(Block::bordered().border_type(BorderType::Rounded))
-        .x_axis(
-            Axis::default()
-                .style(Style::default().fg(Color::Gray))
-                .bounds(app.window),
-        )
-        .y_axis(
-            Axis::default()
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, rx_max]),
-        );
-
-    frame.render_widget(chart, area);
+fn make_bar(percent: f64, width: usize) -> String {
+    if width == 0 {
+        return "".to_string();
+    }
+    let filled = (percent * width as f64) as usize;
+    let filled = filled.min(width);
+    let empty = width.saturating_sub(filled);
+    format!("{}{}", "█".repeat(filled), "░".repeat(empty))
 }
-pub fn draw_tx_graph(app: &mut App, frame: &mut Frame, area: Rect) {
-    let tx_max = app.tx_data.iter().map(|&(_, y)| y).fold(0.0, f64::max);
-    let datasets = vec![Dataset::default()
-        .name(app.interface_name.clone())
-        .marker(symbols::Marker::Block)
-        .graph_type(ratatui::widgets::GraphType::Bar)
-        .style(Style::default().fg(Color::Red))
-        .data(&app.tx_data)];
 
-    let chart = Chart::new(datasets)
-        .block(Block::bordered().border_type(BorderType::Rounded))
-        .x_axis(
-            Axis::default()
-                .style(Style::default().fg(Color::Gray))
-                .bounds(app.window),
-        )
-        .y_axis(
-            Axis::default()
-                .style(Style::default().fg(Color::Gray))
-                .bounds([0.0, tx_max]),
-        );
+fn extract_speed(data_str: &str) -> String {
+    data_str
+        .split("speed: ")
+        .nth(1)
+        .unwrap_or("0 B/s")
+        .trim()
+        .to_string()
+}
 
-    frame.render_widget(chart, area);
+fn extract_speed_from_line(line: &Line) -> String {
+    let text: String = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    extract_speed(&text)
+}
+
+fn parse_speed_for_bar(speed_str: &str) -> f64 {
+    let link_speed_mbps = 5.0;
+
+    if speed_str.contains("GB/s") {
+        let val: f64 = speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
+        (val * 1000.0 / link_speed_mbps).min(1.0)
+    } else if speed_str.contains("MB/s") {
+        let val: f64 = speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
+        (val / link_speed_mbps).min(1.0)
+    } else if speed_str.contains("KB/s") {
+        let val: f64 = speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
+        (val / 1000.0 / link_speed_mbps).min(1.0)
+    } else {
+        0.0
+    }
+}
+fn parse_speed_to_mbps(speed_str: &str) -> f64 {
+    if speed_str.contains("GB/s") {
+        speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0)
+            * 1000.0
+    } else if speed_str.contains("MB/s") {
+        speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0)
+    } else if speed_str.contains("KB/s") {
+        speed_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0)
+            / 1000.0
+    } else {
+        0.0
+    }
+}
+fn format_ip(ip: &[u8; 4]) -> String {
+    format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3])
+}
+
+fn tcp_state_name(state: u64) -> &'static str {
+    match state {
+        0x01 => "ESTABLISHED",
+        0x02 => "SYN_SENT",
+        0x03 => "SYN_RECV",
+        0x04 => "FIN_WAIT1",
+        0x05 => "FIN_WAIT2",
+        0x06 => "TIME_WAIT",
+        0x07 => "CLOSE",
+        0x08 => "CLOSE_WAIT",
+        0x09 => "LAST_ACK",
+        0x0A => "LISTEN",
+        0x0B => "CLOSING",
+        _ => "UNKNOWN",
+    }
+}
+
+fn format_timer(timer_active: u64) -> &'static str {
+    match timer_active {
+        0 => "off",
+        1 => "on",
+        2 => "keepalive",
+        3 => "timewait",
+        4 => "probe",
+        _ => "unknown",
+    }
+}
+fn format_speed_mbps(mbps: f64) -> String {
+    if mbps >= 1000.0 {
+        format!("{:.2} GB/s", mbps / 1000.0)
+    } else if mbps >= 1.0 {
+        format!("{:.2} MB/s", mbps)
+    } else {
+        format!("{:.2} KB/s", mbps * 1000.0)
+    }
 }

@@ -1,6 +1,3 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 use crate::app::App;
 use crate::models::{self, *};
 use anyhow::{anyhow, Error, Ok, Result};
@@ -97,82 +94,24 @@ pub fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line> {
 pub fn get_network_receive_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()
-        .flat_map(|interface| {
-            let mut lines = vec![];
+        .map(|interface| {
+            let speed = app
+                .rx_data
+                .get(&interface.name)
+                .and_then(|data| speed_kachow(data.clone()))
+                .unwrap_or("0 B/s".to_string());
+
             let sum = interface.receive.bytes + interface.transmit.bytes;
-            lines.push(Line::from(format!(
-                " bytes: {}, packets: {}, total: {}",
-                interface.receive.display(app.raw_bytes, app, None),
+            Line::from(format!(
+                " bytes: {}, packets: {}, total: {}, speed: {}",
+                interface.receive.display(app, None),
                 interface.receive.packets,
-                interface.receive.display(app.raw_bytes, app, Some(sum)),
-            )));
-            lines
+                interface.receive.display(app, Some(sum)),
+                speed
+            ))
         })
         .collect();
     lines
-}
-
-pub fn get_selected_network_receive_data<'a>(
-    app: &mut App,
-    stats: &Vec<NetworkStats>,
-) -> Vec<Line<'a>> {
-    let interface_name = app.interface_name.clone();
-    let raw_bytes = app.raw_bytes;
-    let speed = speed_kachow(app.rx_data.clone()).unwrap();
-
-    stats
-        .iter()
-        .filter(move |x| x.name == interface_name)
-        .flat_map(|x| {
-            let display_value = x.receive.display(raw_bytes, app, None);
-            let sum = x.receive.bytes + x.transmit.bytes;
-            let total = x.receive.display(raw_bytes, app, Some(sum));
-            vec![
-                Line::from(format!(" Total: {}", total)),
-                Line::from(format!(" speed: {}", speed)),
-                Line::from(format!(" bytes: {}", display_value)),
-                Line::from(format!(" packets: {}", x.receive.packets)),
-                Line::from(format!(" errs: {}", x.receive.errs)),
-                Line::from(format!(" drop: {}", x.receive.drop)),
-                Line::from(format!(" fifo: {}", x.receive.fifo)),
-                Line::from(format!(" frame: {}", x.receive.frame)),
-                Line::from(format!(" compressed: {}", x.receive.compressed)),
-                Line::from(format!(" multicast: {}", x.receive.multicast)),
-            ]
-        })
-        .collect()
-}
-
-pub fn get_selected_network_transmit_data<'a>(
-    app: &mut App,
-    stats: &Vec<NetworkStats>,
-) -> Vec<Line<'a>> {
-    let interface_name = app.interface_name.clone();
-    let raw_bytes = app.raw_bytes;
-    let speed = speed_kachow(app.tx_data.clone()).unwrap();
-
-    stats
-        .iter()
-        .filter(move |x| x.name == interface_name)
-        .flat_map(|x| {
-            let display_value = x.transmit.display(raw_bytes, app, None);
-            let sum = x.receive.bytes + x.transmit.bytes;
-            let total = x.transmit.display(raw_bytes, app, Some(sum));
-
-            vec![
-                Line::from(format!(" Total: {}", total)),
-                Line::from(format!(" speed: {}", speed)),
-                Line::from(format!(" bytes: {}", display_value)),
-                Line::from(format!(" packets: {}", x.transmit.packets)),
-                Line::from(format!(" errs: {}", x.transmit.errs)),
-                Line::from(format!(" drop: {}", x.transmit.drop)),
-                Line::from(format!(" fifo: {}", x.transmit.fifo)),
-                Line::from(format!(" frame: {}", x.transmit.colls)),
-                Line::from(format!(" compressed: {}", x.transmit.carrier)),
-                Line::from(format!(" multicast: {}", x.transmit.compressed)),
-            ]
-        })
-        .collect()
 }
 
 pub fn human_speed(bytes_per_sec: f64) -> (f64, &'static str) {
@@ -194,33 +133,40 @@ pub fn human_speed(bytes_per_sec: f64) -> (f64, &'static str) {
     }
 }
 pub fn speed_kachow(stats: Vec<(f64, f64)>) -> Option<String> {
-    //s = d2/t2-t1
+    if stats.len() < 2 {
+        return Some("0 B/s".to_string());
+    }
+
     let (t1, _) = stats[stats.len() - 2];
     let (t2, d2) = stats[stats.len() - 1];
     let dt = t2 - t1;
     let speed = d2 as f64 / dt;
-
     let (s, string) = human_speed(speed);
     Some(format!("{:.2} {}", s, string))
 }
+
 pub fn get_network_transmit_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
     let lines: Vec<Line> = stats
         .iter()
-        .flat_map(|interface| {
+        .map(|interface| {
+            let speed = app
+                .tx_data
+                .get(&interface.name)
+                .and_then(|data| speed_kachow(data.clone()))
+                .unwrap_or("0 B/s".to_string());
+
             let sum = interface.receive.bytes + interface.transmit.bytes;
-            let mut lines = vec![];
-            lines.push(Line::from(format!(
-                " bytes: {}, packets: {}, total: {}",
-                interface.transmit.display(app.raw_bytes, app, None),
+            Line::from(format!(
+                " bytes: {}, packets: {}, total: {}, speed: {}",
+                interface.transmit.display(app, None),
                 interface.transmit.packets,
-                interface.transmit.display(app.raw_bytes, app, Some(sum)),
-            )));
-            lines
+                interface.transmit.display(app, Some(sum)),
+                speed
+            ))
         })
         .collect();
     lines
 }
-
 pub fn parse_ip_address(s: &str) -> Result<([u8; 4], u16)> {
     let mut s = s.split(":");
     let ip_hex_value = s.next().ok_or(anyhow!("Failed to parse IP"))?;

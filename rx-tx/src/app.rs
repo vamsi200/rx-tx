@@ -1,3 +1,4 @@
+use crate::app;
 use crate::models::*;
 use crate::parser::*;
 use crate::ui::*;
@@ -15,12 +16,13 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::char;
+use std::collections::HashMap;
 use std::result::Result::Ok;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct App {
     pub is_full_screen: bool,
     pub enter_tick_active: bool,
@@ -31,14 +33,18 @@ pub struct App {
     pub selection_state: ListState,
     pub selected_interface: InterfaceSelected,
     pub prev_stats: Option<Vec<NetworkStats>>,
-    pub rx_data: Vec<(f64, f64)>,
-    pub tx_data: Vec<(f64, f64)>,
+    pub tcp_stats: Option<Vec<TcpStats>>,
+    pub rx_data: HashMap<String, Vec<(f64, f64)>>,
+    pub tx_data: HashMap<String, Vec<(f64, f64)>>,
+    pub rx_avg_speed: HashMap<String, f64>,
+    pub tx_avg_speed: HashMap<String, f64>,
+    pub rx_peak_speed: HashMap<String, f64>,
+    pub tx_peak_speed: HashMap<String, f64>,
     pub start_time: Instant,
     pub last_sample_time: f64,
     pub window: [f64; 2],
     pub raw_bytes: bool,
     pub byte_unit: ByteUnit,
-    pub selected_tab: Tab,
     pub vertical_scroll_state: ScrollbarState,
     pub horizontal_scroll_state: ScrollbarState,
     pub horizontal_scroll: usize,
@@ -50,7 +56,7 @@ impl Default for App {
         Self {
             tick_value: String::new(),
             enter_tick_active: false,
-            tick_rate: Duration::from_millis(500),
+            tick_rate: Duration::from_millis(1800),
             is_full_screen: false,
             interface_name: String::new(),
             selection_state: {
@@ -61,14 +67,18 @@ impl Default for App {
             mode: Mode::Normal,
             selected_interface: InterfaceSelected::All,
             prev_stats: None,
-            rx_data: Vec::new(),
-            tx_data: Vec::new(),
+            tcp_stats: None,
+            rx_data: HashMap::new(),
+            tx_data: HashMap::new(),
+            rx_avg_speed: HashMap::new(),
+            tx_avg_speed: HashMap::new(),
+            rx_peak_speed: HashMap::new(),
+            tx_peak_speed: HashMap::new(),
             start_time: Instant::now(),
             last_sample_time: 0.0,
             window: [0.0, 60.0],
             raw_bytes: false,
             byte_unit: ByteUnit::default(),
-            selected_tab: Tab::default(),
             vertical_scroll_state: ScrollbarState::new(0),
             horizontal_scroll_state: ScrollbarState::new(0),
             horizontal_scroll: 0,
@@ -77,36 +87,23 @@ impl Default for App {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub enum ByteUnit {
     #[default]
     Binary,
     Decimal,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Mode {
     Normal,
     SelectingInterface { filter: String, index: usize },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InterfaceSelected {
     All,
     Interface(String),
-}
-
-#[derive(Default, Clone, Copy)]
-pub enum Tab {
-    #[default]
-    Interface,
-    Tcp,
-}
-
-impl Tab {
-    pub fn titles() -> Vec<&'static str> {
-        vec!["Net/Dev (I)", "Net/Tcp (T)"]
-    }
 }
 
 impl App {
@@ -114,29 +111,38 @@ impl App {
         let now = self.start_time.elapsed().as_secs_f64();
         self.window = [now - 5.0, now];
 
-        let vec_stats = parse_proc_net_dev()?;
+        let net_vec_stats = parse_proc_net_dev()?;
+        let tcp_stats = parse_proc_net_tcp()?;
+        self.tcp_stats = Some(tcp_stats);
 
         if let Some(prev_data) = &self.prev_stats {
-            for (prev, new) in prev_data.iter().zip(vec_stats.iter()) {
+            for (prev, new) in prev_data.iter().zip(net_vec_stats.iter()) {
                 let rx_delta = new.receive.bytes.saturating_sub(prev.receive.bytes);
                 let tx_delta = new.transmit.bytes.saturating_sub(prev.transmit.bytes);
-                match &mut self.selected_interface {
-                    InterfaceSelected::All => {
-                        self.interface_name = String::from("All");
-                        self.rx_data.push((now, rx_delta as f64));
-                        self.tx_data.push((now, tx_delta as f64));
+
+                self.rx_data
+                    .entry(new.name.clone())
+                    .or_insert_with(Vec::new)
+                    .push((now, rx_delta as f64));
+
+                self.tx_data
+                    .entry(new.name.clone())
+                    .or_insert_with(Vec::new)
+                    .push((now, tx_delta as f64));
+
+                if let Some(rx_vec) = self.rx_data.get_mut(&new.name) {
+                    if rx_vec.len() > 100 {
+                        rx_vec.remove(0);
                     }
-                    InterfaceSelected::Interface(s) => {
-                        if new.name == s.to_string() {
-                            self.interface_name = s.to_string();
-                            self.rx_data.push((now, rx_delta as f64));
-                            self.tx_data.push((now, tx_delta as f64));
-                        }
+                }
+                if let Some(tx_vec) = self.tx_data.get_mut(&new.name) {
+                    if tx_vec.len() > 100 {
+                        tx_vec.remove(0);
                     }
                 }
             }
         }
-        self.prev_stats = Some(vec_stats);
+        self.prev_stats = Some(net_vec_stats);
 
         Ok(())
     }
@@ -150,11 +156,12 @@ impl App {
         self.vertical_scroll_state = self.vertical_scroll_state.content_length(new_len);
         self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(new_len);
 
-        let tick_rate = self.tick_rate;
-
         loop {
+            let tick_rate = self.tick_rate;
             let latest_stats = self.prev_stats.clone().unwrap();
-            let _ = terminal.draw(|frame| self.render(frame, &latest_stats));
+            if let Some(tcp_stats) = self.tcp_stats.clone() {
+                let _ = terminal.draw(|frame| self.render(frame, &latest_stats, &tcp_stats));
+            }
 
             let mut timeout = tick_rate.saturating_sub(last_tick.elapsed());
             if timeout == Duration::ZERO {
@@ -187,10 +194,6 @@ impl App {
                             KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
                             KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
                             KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
-                            KeyCode::Char('i') | KeyCode::Char('I') => {
-                                self.selected_tab = Tab::Interface
-                            }
-                            KeyCode::Char('t') | KeyCode::Char('T') => self.selected_tab = Tab::Tcp,
                             _ => {}
                         },
                         Mode::SelectingInterface { filter, index } => match key.code {
@@ -293,14 +296,12 @@ impl App {
             .horizontal_scroll_state
             .position(self.horizontal_scroll);
     }
-    pub fn render(&mut self, frame: &mut Frame, net_data: &Vec<NetworkStats>) {
-        match self.selected_tab {
-            Tab::Interface => {
-                crate::ui::draw_interface_mode(self, frame, net_data);
-            }
-            Tab::Tcp => {
-                // crate::ui::draw_tcp_mode(self, frame, data);
-            }
-        }
+    pub fn render(
+        &mut self,
+        frame: &mut Frame,
+        net_data: &Vec<NetworkStats>,
+        tcp_data: &Vec<TcpStats>,
+    ) {
+        crate::ui::draw_interface_mode(self, frame, net_data, tcp_data);
     }
 }

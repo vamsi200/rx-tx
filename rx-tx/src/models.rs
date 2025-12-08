@@ -1,4 +1,6 @@
-use crate::app::{App, ByteUnit};
+use anyhow::Ok;
+
+use crate::app::{self, App, ByteUnit};
 
 #[derive(Debug, Clone)]
 pub struct NetworkStats {
@@ -32,21 +34,39 @@ pub struct Transmit {
 }
 
 impl Receive {
-    pub fn display(&self, raw_bytes: bool, app: &mut App) -> String {
+    pub fn display(&self, app: &mut App, total: Option<u64>) -> String {
+        let raw_bytes = app.raw_bytes;
         if raw_bytes {
-            self.bytes.to_string()
+            if let Some(s) = total {
+                s.to_string()
+            } else {
+                self.bytes.to_string()
+            }
         } else {
-            format_bytes(self.bytes, &app.byte_unit)
+            if let Some(s) = total {
+                format_bytes(s, &app.byte_unit)
+            } else {
+                format_bytes(self.bytes, &app.byte_unit)
+            }
         }
     }
 }
 
 impl Transmit {
-    pub fn display(&self, raw_bytes: bool, app: &mut App) -> String {
+    pub fn display(&self, app: &mut App, total: Option<u64>) -> String {
+        let raw_bytes = app.raw_bytes;
         if raw_bytes {
-            self.bytes.to_string()
+            if let Some(s) = total {
+                s.to_string()
+            } else {
+                self.bytes.to_string()
+            }
         } else {
-            format_bytes(self.bytes, &app.byte_unit)
+            if let Some(s) = total {
+                format_bytes(s, &app.byte_unit)
+            } else {
+                format_bytes(self.bytes, &app.byte_unit)
+            }
         }
     }
 }
@@ -89,7 +109,7 @@ pub fn format_bytes(data: u64, unit: &ByteUnit) -> String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TcpStats {
     pub sl: u16,
     pub local_ip: [u8; 4],
