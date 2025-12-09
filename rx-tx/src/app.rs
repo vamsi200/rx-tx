@@ -24,7 +24,7 @@ use std::vec;
 
 #[derive(Clone, Debug)]
 pub struct App {
-    pub is_full_screen: bool,
+    pub show_help: bool,
     pub enter_tick_active: bool,
     pub interface_name: String,
     pub tick_rate: Duration,
@@ -54,10 +54,10 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
+            show_help: false,
             tick_value: String::new(),
             enter_tick_active: false,
             tick_rate: Duration::from_millis(1800),
-            is_full_screen: false,
             interface_name: String::new(),
             selection_state: {
                 let mut state = ListState::default();
@@ -183,7 +183,6 @@ impl App {
                                 self.tick_value.clear();
                                 continue;
                             }
-                            KeyCode::Char('e') => self.is_full_screen = !self.is_full_screen,
                             KeyCode::Char('q') => {
                                 break;
                             }
@@ -194,6 +193,9 @@ impl App {
                             KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
                             KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
                             KeyCode::Char('b') => self.byte_unit = ByteUnit::Binary,
+                            KeyCode::Char('?') | KeyCode::Char('h') => {
+                                self.show_help = !self.show_help
+                            }
                             _ => {}
                         },
                         Mode::SelectingInterface { filter, index } => match key.code {
@@ -237,6 +239,14 @@ impl App {
                             }
                             _ => {}
                         },
+                    }
+                    if self.show_help {
+                        match key.code {
+                            KeyCode::Esc => {
+                                self.show_help = false;
+                            }
+                            _ => {}
+                        }
                     }
                     if self.enter_tick_active {
                         match key.code {

@@ -2,6 +2,7 @@ use crate::app;
 use crate::app::*;
 use crate::models;
 use crate::models::*;
+use crate::parser::parse_uptime;
 use crate::parser::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
@@ -16,8 +17,10 @@ use ratatui::symbols::scrollbar;
 use ratatui::text::{Line, Masked, Span};
 use ratatui::widgets::block::title;
 use ratatui::widgets::Cell;
+use ratatui::widgets::Clear;
 use ratatui::widgets::Row;
 use ratatui::widgets::Table;
+use ratatui::widgets::Wrap;
 use ratatui::widgets::{
     Axis, BorderType, Borders, Chart, Dataset, HighlightSpacing, List, ListItem, ListState, Tabs,
     Widget,
@@ -33,6 +36,81 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
+fn draw_tick_mode(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+
+    let popup_area = centered_rect(40, 30, area);
+
+    frame.render_widget(Clear, popup_area);
+
+    let tick_millis = app.tick_rate.as_millis();
+    let current_tick = if tick_millis >= 1000 {
+        format!("{:.1}s", (tick_millis as f64) / 1000.0)
+    } else {
+        format!("{}ms", tick_millis)
+    };
+
+    let tick_text = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Current: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                current_tick,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  New Rate: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if app.tick_value.is_empty() {
+                    "_".to_string()
+                } else {
+                    format!("{}█", app.tick_value)
+                },
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ms", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                "  Enter ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("to apply  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "Esc ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("to cancel", Style::default().fg(Color::DarkGray)),
+        ]),
+    ];
+
+    let tick_popup = Paragraph::new(tick_text)
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Yellow))
+                .title(" ⏱ SET TICK RATE ")
+                .title_style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+        )
+        .alignment(Alignment::Left);
+
+    frame.render_widget(tick_popup, popup_area);
+}
+
 pub fn draw_interface_mode(
     app: &mut App,
     frame: &mut Frame,
@@ -41,6 +119,13 @@ pub fn draw_interface_mode(
 ) {
     let byte_unit = app.byte_unit.clone();
     let area = frame.area();
+    let uptime = parse_uptime().unwrap_or(String::new());
+    let tick_millis = app.tick_rate.as_millis();
+    let tick_display = if tick_millis >= 1000 {
+        format!("{:.1}s", (tick_millis as f64) / 1000.0)
+    } else {
+        format!("{}ms", tick_millis)
+    };
 
     let chunks =
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
@@ -48,20 +133,9 @@ pub fn draw_interface_mode(
     let main_part = chunks[0];
     let tcp_area = chunks[1];
 
-    let interface_count = data.len();
-    let list_percentage = if interface_count <= 3 {
-        35
-    } else if interface_count <= 6 {
-        30
-    } else {
-        25
-    };
-
-    let main_split = Layout::horizontal([
-        Constraint::Percentage(list_percentage),
-        Constraint::Percentage(100 - list_percentage),
-    ])
-    .split(main_part);
+    let main_split =
+        Layout::horizontal([Constraint::Percentage(18), Constraint::Percentage(100 - 18)])
+            .split(main_part);
 
     let list_area = main_split[0];
     let detail_area = main_split[1];
@@ -215,7 +289,7 @@ pub fn draw_interface_mode(
             let list = List::new(items).block(
                 Block::bordered()
                     .border_type(BorderType::Rounded)
-                    .title(format!(" 📡 INTERFACES ({}) ", interface_count))
+                    .title(format!(" 📡 INTERFACES (f)"))
                     .title_style(
                         Style::default()
                             .fg(Color::Cyan)
@@ -338,8 +412,22 @@ pub fn draw_interface_mode(
                             Span::styled(rx_avg_str, Style::default().fg(Color::Cyan)),
                             Span::raw(" "),
                         ])
-                        .green(),
-                );
+                        .title_top(
+                            Line::from(vec![
+                                Span::styled(" Tick: ", Style::default().fg(Color::DarkGray)),
+                                Span::styled(
+                                    tick_display,
+                                    Style::default()
+                                        .fg(Color::Cyan)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(" (k) ", Style::default().fg(Color::DarkGray)),
+                            ])
+                            .right_aligned(),
+                        ),
+                )
+                .alignment(Alignment::Left);
+
                 frame.render_widget(rx_para, detail_chunks[0]);
                 let tx_para = Paragraph::new(vec![
                     Line::from(""),
@@ -399,9 +487,8 @@ pub fn draw_interface_mode(
                 .split(detail_chunks[2]);
 
                 let left_col = Paragraph::new(vec![
-                    Line::from(""),
                     Line::from(vec![
-                        Span::styled("  Name:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Name        : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             &interface_data.name,
                             Style::default()
@@ -410,32 +497,44 @@ pub fn draw_interface_mode(
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Total: ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Total       : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(total_str, Style::default().fg(Color::Yellow)),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  RX Bytes    : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(rx_bytes_str, Style::default().fg(Color::Green)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  RX Packets  : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.packets),
+                            Style::default().fg(Color::Green),
+                        ),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  TX Bytes    : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(tx_bytes_str, Style::default().fg(Color::Blue)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  TX Packets  : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.packets),
+                            Style::default().fg(Color::Blue),
+                        ),
                     ]),
                 ])
                 .block(
                     Block::bordered()
                         .border_type(BorderType::Rounded)
-                        .title(" INFO ")
+                        .title(" 📊 INFO ")
                         .cyan(),
                 );
 
                 let middle_col = Paragraph::new(vec![
-                    Line::from(""),
                     Line::from(vec![
-                        Span::styled("  Bytes:   ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(rx_bytes_str, Style::default().fg(Color::White)),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("  Packets: ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            format!("{}", interface_data.receive.packets),
-                            Style::default().fg(Color::White),
-                        ),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("  Errors:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Errors      : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             format!("{}", interface_data.receive.errs),
                             if interface_data.receive.errs > 0 {
@@ -446,7 +545,7 @@ pub fn draw_interface_mode(
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Drops:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Drops       : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             format!("{}", interface_data.receive.drop),
                             if interface_data.receive.drop > 0 {
@@ -454,6 +553,43 @@ pub fn draw_interface_mode(
                             } else {
                                 Style::default().fg(Color::Green)
                             },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  FIFO        : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.fifo),
+                            if interface_data.receive.fifo > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Frame       : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.frame),
+                            if interface_data.receive.frame > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  Compressed  : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.compressed),
+                            Style::default().fg(Color::White),
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Multicast   : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.receive.multicast),
+                            Style::default().fg(Color::White),
                         ),
                     ]),
                 ])
@@ -465,20 +601,8 @@ pub fn draw_interface_mode(
                 );
 
                 let right_col = Paragraph::new(vec![
-                    Line::from(""),
                     Line::from(vec![
-                        Span::styled("  Bytes:   ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(tx_bytes_str, Style::default().fg(Color::White)),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("  Packets: ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            format!("{}", interface_data.transmit.packets),
-                            Style::default().fg(Color::White),
-                        ),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("  Errors:  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Errors       : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             format!("{}", interface_data.transmit.errs),
                             if interface_data.transmit.errs > 0 {
@@ -489,7 +613,7 @@ pub fn draw_interface_mode(
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Drops:   ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("  Drops        : ", Style::default().fg(Color::DarkGray)),
                         Span::styled(
                             format!("{}", interface_data.transmit.drop),
                             if interface_data.transmit.drop > 0 {
@@ -497,6 +621,51 @@ pub fn draw_interface_mode(
                             } else {
                                 Style::default().fg(Color::Green)
                             },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  FIFO         : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.fifo),
+                            if interface_data.transmit.fifo > 0 {
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Collisions   : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.colls),
+                            if interface_data.transmit.colls > 0 {
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("  Carrier      : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.carrier),
+                            if interface_data.transmit.carrier > 0 {
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            },
+                        ),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("  Compressed   : ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{}", interface_data.transmit.compressed),
+                            Style::default().fg(Color::White),
                         ),
                     ]),
                 ])
@@ -528,46 +697,113 @@ pub fn draw_interface_mode(
             };
 
             let summary = Paragraph::new(vec![
-                Line::from(""),
                 Line::from(Span::styled(
                     "  ALL INTERFACES",
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 )),
-                Line::from(""),
                 Line::from(vec![
-                    Span::styled("  Total RX:      ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("  System Uptime : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(uptime, Style::default().fg(Color::Cyan)),
+                ]),
+                Line::from(vec![
+                    Span::styled("  Interfaces    : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}", data.len()),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("  Total RX      : ", Style::default().fg(Color::DarkGray)),
                     Span::styled(summary_rx_val, Style::default().fg(Color::Green)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Total TX:      ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("  Total TX      : ", Style::default().fg(Color::DarkGray)),
                     Span::styled(summary_tx_val, Style::default().fg(Color::Blue)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Total Packets: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("  Total Packets : ", Style::default().fg(Color::DarkGray)),
                     Span::styled(
                         format!("{}", total_packets),
                         Style::default().fg(Color::White),
                     ),
                 ]),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "  💡 Select an interface for details",
-                    Style::default().fg(Color::DarkGray).italic(),
-                )),
             ])
             .block(
                 Block::bordered()
                     .border_type(BorderType::Rounded)
-                    .title(" 📊 OVERVIEW ")
-                    .cyan(),
+                    .title_top(Line::from(" 📊 OVERVIEW ").left_aligned())
+                    .title_top(
+                        Line::from(vec![
+                            Span::styled(" Tick: ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(
+                                tick_display,
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(" (k) ", Style::default().fg(Color::DarkGray)),
+                        ])
+                        .right_aligned(),
+                    ),
             )
             .alignment(Alignment::Left);
 
             frame.render_widget(summary, detail_area);
         }
     }
+
+    let mut state_counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for conn in tcp_data.iter() {
+        let state = tcp_state_name(conn.state);
+        *state_counts.entry(state).or_insert(0) += 1;
+    }
+
+    let tcp_split =
+        Layout::horizontal([Constraint::Length(35), Constraint::Fill(1)]).split(tcp_area);
+
+    let mut summary_lines = vec![
+        Line::from("  Connections").style(Style::default().fg(Color::Yellow)),
+        Line::from(vec![
+            Span::styled("  Total       : ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{}", tcp_data.len()),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+    ];
+
+    for (state, count) in state_counts.iter() {
+        let color = match *state {
+            "ESTABLISHED" => Color::Green,
+            "LISTEN" => Color::Cyan,
+            "TIME_WAIT" => Color::Yellow,
+            _ => Color::White,
+        };
+        summary_lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<12}: ", state),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(format!("{}", count), Style::default().fg(color)),
+        ]));
+    }
+
+    let summary = Paragraph::new(summary_lines).block(
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .title(" 📊 INFO ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+    );
+
+    frame.render_widget(summary, tcp_split[0]);
 
     let tcp_rows: Vec<Row> = tcp_data
         .iter()
@@ -595,27 +831,16 @@ pub fn draw_interface_mode(
                 Style::default().fg(Color::DarkGray)
             };
 
-            let timer_style = if conn.timer_active > 0 {
-                Style::default().fg(Color::Cyan)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-
             Row::new(vec![
-                Cell::from(format!("{}", conn.sl)),
-                Cell::from(local_addr),
-                Cell::from(remote_addr),
-                Cell::from(Span::styled(state, state_style)),
+                Cell::from(format!(" {}", local_addr)),
+                Cell::from(format!(" {}", remote_addr)),
+                Cell::from(Span::styled(format!(" {}", state), state_style)),
                 Cell::from(Span::styled(
-                    format!("{}:{}", conn.tx_queue, conn.rx_queue),
+                    format!(" {}:{}", conn.tx_queue, conn.rx_queue),
                     queue_style,
                 )),
-                Cell::from(Span::styled(timer, timer_style)),
-                Cell::from(format!("{}", conn.timer_when)),
-                Cell::from(format!("{}", conn.retransmit_timeout)),
-                Cell::from(format!("{}", conn.uid)),
-                Cell::from(format!("{}", conn.timeout)),
-                Cell::from(format!("{}", conn.inode)),
+                Cell::from(format!(" {}", conn.uid)),
+                Cell::from(format!(" {}", conn.inode)),
             ])
         })
         .collect();
@@ -623,39 +848,28 @@ pub fn draw_interface_mode(
     let tcp_table = Table::new(
         tcp_rows,
         [
-            Constraint::Length(4),      // sl
-            Constraint::Percentage(20), // local_address
-            Constraint::Percentage(20), // remote_address
-            Constraint::Length(15),     // state
-            Constraint::Length(12),     // tx:rx
-            Constraint::Length(10),     // timer
-            Constraint::Length(10),     // when
-            Constraint::Length(10),     // retrnsmt
-            Constraint::Length(10),     // uid
-            Constraint::Length(10),     // timeout
-            Constraint::Fill(1),        // inode
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Length(12),
+            Constraint::Length(10),
+            Constraint::Length(6),
+            Constraint::Fill(1),
         ],
     )
     .header(
         Row::new(vec![
-            Cell::from("Sl"),
-            Cell::from("Local Address"),
-            Cell::from("Remote Address"),
-            Cell::from("State"),
-            Cell::from("TX:RX"),
-            Cell::from("Timer"),
-            Cell::from("When"),
-            Cell::from("Retrns"),
-            Cell::from("UID"),
-            Cell::from("Timeout"),
-            Cell::from("Inode"),
+            Cell::from(" Local Address"),
+            Cell::from(" Remote Address"),
+            Cell::from(" State"),
+            Cell::from(" TX:RX"),
+            Cell::from(" UID"),
+            Cell::from(" Inode"),
         ])
         .style(
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
-        )
-        .bottom_margin(1),
+        ),
     )
     .block(
         Block::bordered()
@@ -665,10 +879,150 @@ pub fn draw_interface_mode(
                 Style::default()
                     .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
+            )
+            .padding(ratatui::widgets::Padding::horizontal(1)),
+    );
+
+    frame.render_widget(tcp_table, tcp_split[1]);
+    if app.show_help {
+        render_help_popup(frame);
+    }
+    if app.enter_tick_active {
+        draw_tick_mode(frame, app);
+    }
+}
+
+fn render_help_popup(frame: &mut Frame) {
+    let area = frame.area();
+
+    let popup_area = centered_rect(70, 85, area);
+
+    frame.render_widget(Clear, popup_area);
+
+    let help_text = vec![
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  Keys:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("    ↑ /↓        ", Style::default().fg(Color::Green)),
+            Span::raw("Navigate interface list"),
+        ]),
+        Line::from(vec![
+            Span::styled("    Enter           ", Style::default().fg(Color::Green)),
+            Span::raw("Select interface"),
+        ]),
+        Line::from(vec![
+            Span::styled("    Esc             ", Style::default().fg(Color::Green)),
+            Span::raw("Clear selection / Exit filter"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  Interface:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("    f               ", Style::default().fg(Color::Green)),
+            Span::raw("Filter interfaces by name"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  Display:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("    r               ", Style::default().fg(Color::Green)),
+            Span::raw("Toggle raw bytes display"),
+        ]),
+        Line::from(vec![
+            Span::styled("    d               ", Style::default().fg(Color::Green)),
+            Span::raw("Decimal byte unit (KB, MB, GB)"),
+        ]),
+        Line::from(vec![
+            Span::styled("    b               ", Style::default().fg(Color::Green)),
+            Span::raw("Binary byte unit (KiB, MiB, GiB)"),
+        ]),
+        Line::from(vec![
+            Span::styled("    k               ", Style::default().fg(Color::Green)),
+            Span::raw("Update tick rate"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  Other:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("    ?, h            ", Style::default().fg(Color::Green)),
+            Span::raw("Show/hide this help"),
+        ]),
+        Line::from(vec![
+            Span::styled("    q               ", Style::default().fg(Color::Green)),
+            Span::raw("Quit"),
+        ]),
+        Line::from(""),
+        Line::from(vec![]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Press ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "Esc",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" or ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "?",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" to close", Style::default().fg(Color::DarkGray)),
+        ]),
+    ];
+
+    let help = Paragraph::new(help_text).block(
+        Block::bordered()
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(vec![Span::raw(" "), Span::raw(" HELP ")])
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
     );
 
-    frame.render_widget(tcp_table, tcp_area);
+    frame.render_widget(help, popup_area);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::vertical([
+        Constraint::Percentage((100 - percent_y) / 2),
+        Constraint::Percentage(percent_y),
+        Constraint::Percentage((100 - percent_y) / 2),
+    ])
+    .split(r);
+
+    Layout::horizontal([
+        Constraint::Percentage((100 - percent_x) / 2),
+        Constraint::Percentage(percent_x),
+        Constraint::Percentage((100 - percent_x) / 2),
+    ])
+    .split(popup_layout[1])[1]
 }
 
 fn make_bar(percent: f64, width: usize) -> String {

@@ -249,3 +249,21 @@ pub fn parse_proc_net_tcp() -> Result<Vec<TcpStats>> {
     }
     Ok(output)
 }
+
+pub fn parse_uptime() -> Result<String> {
+    let mut file = File::open("/proc/uptime")?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf)?;
+    let uptime_secs = buf
+        .split('.')
+        .next()
+        .expect("Failed to parse uptime")
+        .parse::<u64>()
+        .expect("Failed to parse uptime");
+
+    let hours = uptime_secs / 3600;
+    let minutes = uptime_secs % 3600 / 60;
+    let secs = uptime_secs % 60;
+    let out_string = format!("{hours}:{minutes}:{secs}");
+    Ok(out_string)
+}
