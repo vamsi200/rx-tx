@@ -250,6 +250,90 @@ pub fn parse_proc_net_tcp() -> Result<Vec<TcpStats>> {
     Ok(output)
 }
 
+pub fn extract_speed(data_str: &str) -> String {
+    data_str
+        .split("speed: ")
+        .nth(1)
+        .unwrap_or("0 B/s")
+        .trim()
+        .to_string()
+}
+
+pub fn extract_speed_from_line(line: &Line) -> String {
+    let text: String = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    extract_speed(&text)
+}
+
+pub fn parse_speed(speed_str: &str, link_speed: Option<f64>) -> f64 {
+    let val = speed_str
+        .split_whitespace()
+        .next()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.0);
+
+    let speed_mbps = if speed_str.contains("GB/s") {
+        val * 1000.0
+    } else if speed_str.contains("MB/s") {
+        val
+    } else if speed_str.contains("KB/s") {
+        val / 1000.0
+    } else {
+        0.0
+    };
+
+    let Some(link) = link_speed else {
+        return speed_mbps;
+    };
+
+    (speed_mbps / link).min(1.0)
+}
+
+pub fn format_ip(ip: &[u8; 4]) -> String {
+    format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3])
+}
+
+pub fn tcp_state_name(state: u64) -> &'static str {
+    match state {
+        0x01 => "ESTABLISHED",
+        0x02 => "SYN_SENT",
+        0x03 => "SYN_RECV",
+        0x04 => "FIN_WAIT1",
+        0x05 => "FIN_WAIT2",
+        0x06 => "TIME_WAIT",
+        0x07 => "CLOSE",
+        0x08 => "CLOSE_WAIT",
+        0x09 => "LAST_ACK",
+        0x0A => "LISTEN",
+        0x0B => "CLOSING",
+        _ => "UNKNOWN",
+    }
+}
+
+pub fn format_timer(timer_active: u64) -> &'static str {
+    match timer_active {
+        0 => "off",
+        1 => "on",
+        2 => "keepalive",
+        3 => "timewait",
+        4 => "probe",
+        _ => "unknown",
+    }
+}
+
+pub fn format_speed_mbps(mbps: f64) -> String {
+    if mbps >= 1000.0 {
+        format!("{:.2} GB/s", mbps / 1000.0)
+    } else if mbps >= 1.0 {
+        format!("{:.2} MB/s", mbps)
+    } else {
+        format!("{:.2} KB/s", mbps * 1000.0)
+    }
+}
+
 pub fn parse_uptime() -> Result<String> {
     let mut file = File::open("/proc/uptime")?;
     let mut buf = String::new();

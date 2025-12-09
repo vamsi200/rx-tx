@@ -18,12 +18,14 @@ use ratatui::{DefaultTerminal, Terminal};
 use std::char;
 use std::collections::HashMap;
 use std::result::Result::Ok;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
 #[derive(Clone, Debug)]
 pub struct App {
+    pub hostname_cache_arc: Arc<Mutex<HashMap<[u8; 4], String>>>,
     pub show_help: bool,
     pub enter_tick_active: bool,
     pub interface_name: String,
@@ -36,10 +38,6 @@ pub struct App {
     pub tcp_stats: Option<Vec<TcpStats>>,
     pub rx_data: HashMap<String, Vec<(f64, f64)>>,
     pub tx_data: HashMap<String, Vec<(f64, f64)>>,
-    pub rx_avg_speed: HashMap<String, f64>,
-    pub tx_avg_speed: HashMap<String, f64>,
-    pub rx_peak_speed: HashMap<String, f64>,
-    pub tx_peak_speed: HashMap<String, f64>,
     pub start_time: Instant,
     pub last_sample_time: f64,
     pub window: [f64; 2],
@@ -49,11 +47,16 @@ pub struct App {
     pub horizontal_scroll_state: ScrollbarState,
     pub horizontal_scroll: usize,
     pub vertical_scroll: usize,
+    pub tcp_vertical_scroll_state: ScrollbarState,
+    pub tcp_vertical_scroll: usize,
+    pub focus: Focus,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            hostname_cache_arc: Arc::new(Mutex::new(HashMap::new())),
+            focus: Focus::Interfaces,
             show_help: false,
             tick_value: String::new(),
             enter_tick_active: false,
@@ -70,10 +73,6 @@ impl Default for App {
             tcp_stats: None,
             rx_data: HashMap::new(),
             tx_data: HashMap::new(),
-            rx_avg_speed: HashMap::new(),
-            tx_avg_speed: HashMap::new(),
-            rx_peak_speed: HashMap::new(),
-            tx_peak_speed: HashMap::new(),
             start_time: Instant::now(),
             last_sample_time: 0.0,
             window: [0.0, 60.0],
@@ -83,6 +82,8 @@ impl Default for App {
             horizontal_scroll_state: ScrollbarState::new(0),
             horizontal_scroll: 0,
             vertical_scroll: 0,
+            tcp_vertical_scroll_state: ScrollbarState::new(0),
+            tcp_vertical_scroll: 0,
         }
     }
 }
@@ -104,6 +105,12 @@ pub enum Mode {
 pub enum InterfaceSelected {
     All,
     Interface(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Focus {
+    Interfaces,
+    TcpTable,
 }
 
 impl App {
@@ -172,13 +179,19 @@ impl App {
                 if let Event::Key(key) = event::read()? {
                     match &mut self.mode {
                         Mode::Normal => match key.code {
+                            KeyCode::Tab => {
+                                self.focus = match self.focus {
+                                    Focus::Interfaces => Focus::TcpTable,
+                                    Focus::TcpTable => Focus::Interfaces,
+                                };
+                            }
                             KeyCode::Char('f') => {
                                 self.mode = Mode::SelectingInterface {
                                     filter: String::new(),
                                     index: 0,
                                 }
                             }
-                            KeyCode::Char('k') => {
+                            KeyCode::Char('K') => {
                                 self.enter_tick_active = true;
                                 self.tick_value.clear();
                                 continue;
@@ -187,8 +200,27 @@ impl App {
                                 break;
                             }
                             KeyCode::Left => self.scroll_left(),
-                            KeyCode::Down => self.scroll_down(),
-                            KeyCode::Up => self.scroll_up(),
+                            KeyCode::Down => match self.focus {
+                                Focus::Interfaces => self.scroll_down(),
+                                Focus::TcpTable => {
+                                    self.tcp_tablescroll_down();
+                                }
+                            },
+                            KeyCode::Up => match self.focus {
+                                Focus::Interfaces => self.scroll_up(),
+                                Focus::TcpTable => self.tcp_tablescroll_up(),
+                            },
+                            KeyCode::Char('j') => match self.focus {
+                                Focus::Interfaces => self.scroll_down(),
+                                Focus::TcpTable => {
+                                    self.tcp_tablescroll_down();
+                                }
+                            },
+                            KeyCode::Char('k') => match self.focus {
+                                Focus::Interfaces => self.scroll_up(),
+                                Focus::TcpTable => self.tcp_tablescroll_up(),
+                            },
+
                             KeyCode::Right => self.scroll_right(),
                             KeyCode::Char('r') => self.raw_bytes = !self.raw_bytes,
                             KeyCode::Char('d') => self.byte_unit = ByteUnit::Decimal,
@@ -282,6 +314,22 @@ impl App {
     pub fn scroll_up(&mut self) {
         self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
         self.update_scroll_state();
+    }
+
+    pub fn tcp_tablescroll_up(&mut self) {
+        self.tcp_vertical_scroll = self.tcp_vertical_scroll.saturating_sub(1);
+        self.tcp_update_scroll_state();
+    }
+
+    pub fn tcp_tablescroll_down(&mut self) {
+        self.tcp_vertical_scroll = self.tcp_vertical_scroll.saturating_add(1);
+        self.tcp_update_scroll_state();
+    }
+
+    pub fn tcp_update_scroll_state(&mut self) {
+        self.tcp_vertical_scroll_state = self
+            .tcp_vertical_scroll_state
+            .position(self.tcp_vertical_scroll);
     }
 
     pub fn scroll_down(&mut self) {

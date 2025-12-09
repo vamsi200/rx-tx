@@ -1,8 +1,5 @@
-use crate::app;
 use crate::app::*;
-use crate::models;
 use crate::models::*;
-use crate::parser::parse_uptime;
 use crate::parser::*;
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
@@ -31,7 +28,10 @@ use ratatui::{DefaultTerminal, Terminal};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::format;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use std::ops::Sub;
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
@@ -117,6 +117,23 @@ pub fn draw_interface_mode(
     data: &Vec<NetworkStats>,
     tcp_data: &Vec<TcpStats>,
 ) {
+    let mut rx_peak_speed: HashMap<String, f64> = HashMap::new();
+    let mut tx_peak_speed: HashMap<String, f64> = HashMap::new();
+    let mut rx_avg_speed: HashMap<String, f64> = HashMap::new();
+    let mut tx_avg_speed: HashMap<String, f64> = HashMap::new();
+
+    let interface_border_color = if app.focus == Focus::Interfaces {
+        Color::Rgb(100, 200, 255)
+    } else {
+        Color::Rgb(80, 80, 80)
+    };
+
+    let tcp_border_color = if app.focus == Focus::TcpTable {
+        Color::Rgb(100, 200, 255)
+    } else {
+        Color::Rgb(80, 80, 80)
+    };
+
     let byte_unit = app.byte_unit.clone();
     let area = frame.area();
     let uptime = parse_uptime().unwrap_or(String::new());
@@ -129,13 +146,11 @@ pub fn draw_interface_mode(
 
     let chunks =
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
-
     let main_part = chunks[0];
     let tcp_area = chunks[1];
 
     let main_split =
-        Layout::horizontal([Constraint::Percentage(18), Constraint::Percentage(100 - 18)])
-            .split(main_part);
+        Layout::horizontal([Constraint::Length(25), Constraint::Fill(1)]).split(main_part);
 
     let list_area = main_split[0];
     let detail_area = main_split[1];
@@ -170,8 +185,8 @@ pub fn draw_interface_mode(
                             .unwrap_or(Line::from("0 B/s")),
                     );
 
-                    let rx_load = parse_speed_for_bar(&rx_speed_str);
-                    let tx_load = parse_speed_for_bar(&tx_speed_str);
+                    let rx_load = parse_speed(&rx_speed_str, Some(5.0));
+                    let tx_load = parse_speed(&tx_speed_str, Some(5.0));
                     let is_active = rx_load > 0.01 || tx_load > 0.01;
 
                     let activity = if is_active {
@@ -185,15 +200,18 @@ pub fn draw_interface_mode(
                         Span::raw(" ")
                     };
 
-                    ListItem::new(vec![Line::from(vec![
-                        Span::styled(
-                            format!("{:>2}.", display_idx + 1),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::raw(" "),
-                        Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
-                        activity,
-                    ])])
+                    ListItem::new(vec![
+                        Line::from(vec![
+                            Span::styled(
+                                format!("{:>2}.", display_idx + 1),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
+                            activity,
+                        ]),
+                        Line::from(""),
+                    ])
                 })
                 .collect();
 
@@ -256,8 +274,8 @@ pub fn draw_interface_mode(
                             .unwrap_or(Line::from("0 B/s")),
                     );
 
-                    let rx_load = parse_speed_for_bar(&rx_speed_str);
-                    let tx_load = parse_speed_for_bar(&tx_speed_str);
+                    let rx_load = parse_speed(&rx_speed_str, Some(5.0));
+                    let tx_load = parse_speed(&tx_speed_str, Some(5.0));
                     let is_active = rx_load > 0.01 || tx_load > 0.01;
 
                     let activity = if is_active {
@@ -271,15 +289,18 @@ pub fn draw_interface_mode(
                         Span::raw(" ")
                     };
 
-                    ListItem::new(vec![Line::from(vec![
-                        Span::styled(
-                            format!("{:>2}.", idx + 1),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::raw(" "),
-                        Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
-                        activity,
-                    ])])
+                    ListItem::new(vec![
+                        Line::from(vec![
+                            Span::styled(
+                                format!("{:>2}.", idx + 1),
+                                Style::default().fg(Color::DarkGray),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(format!("{:<16}", name), Style::default().fg(Color::Cyan)),
+                            activity,
+                        ]),
+                        Line::from(""),
+                    ])
                 })
                 .collect();
 
@@ -292,17 +313,17 @@ pub fn draw_interface_mode(
                     .title(format!(" 📡 INTERFACES (f)"))
                     .title_style(
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(interface_border_color)
                             .add_modifier(Modifier::BOLD),
                     ),
             );
 
             frame.render_stateful_widget(list, list_area, &mut state);
-            frame.render_stateful_widget(
+            let scroll_bar_state = frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(None)
                     .end_symbol(None)
-                    .track_symbol(Some("┊"))
+                    .track_symbol(None)
                     .thumb_symbol("┃"),
                 list_area.inner(Margin {
                     vertical: 1,
@@ -332,8 +353,8 @@ pub fn draw_interface_mode(
                 );
 
                 let bar_width = (detail_area.width as usize).saturating_sub(30);
-                let rx_load = parse_speed_for_bar(&rx_speed_str);
-                let tx_load = parse_speed_for_bar(&tx_speed_str);
+                let rx_load = parse_speed(&rx_speed_str, Some(5.0));
+                let tx_load = parse_speed(&tx_speed_str, Some(5.0));
 
                 let detail_chunks = Layout::vertical([
                     Constraint::Length(5),
@@ -342,26 +363,20 @@ pub fn draw_interface_mode(
                 ])
                 .split(detail_area);
 
-                let rx_current = parse_speed_to_mbps(&rx_speed_str);
-                let tx_current = parse_speed_to_mbps(&tx_speed_str);
+                let rx_current = parse_speed(&rx_speed_str, None);
+                let tx_current = parse_speed(&tx_speed_str, None);
 
-                let rx_peak = app
-                    .rx_peak_speed
-                    .entry(selected_name.clone())
-                    .or_insert(0.0);
+                let rx_peak = rx_peak_speed.entry(selected_name.clone()).or_insert(0.0);
                 if rx_current > *rx_peak {
                     *rx_peak = rx_current;
                 }
-                let tx_peak = app
-                    .tx_peak_speed
-                    .entry(selected_name.clone())
-                    .or_insert(0.0);
+                let tx_peak = tx_peak_speed.entry(selected_name.clone()).or_insert(0.0);
                 if tx_current > *tx_peak {
                     *tx_peak = tx_current;
                 }
 
-                let rx_avg = app.rx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
-                let tx_avg = app.tx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
+                let rx_avg = rx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
+                let tx_avg = tx_avg_speed.entry(selected_name.clone()).or_insert(0.0);
 
                 *rx_avg = (*rx_avg * 0.95) + (rx_current * 0.05);
                 *tx_avg = (*tx_avg * 0.95) + (tx_current * 0.05);
@@ -421,7 +436,7 @@ pub fn draw_interface_mode(
                                         .fg(Color::Cyan)
                                         .add_modifier(Modifier::BOLD),
                                 ),
-                                Span::styled(" (k) ", Style::default().fg(Color::DarkGray)),
+                                Span::styled(" (K) ", Style::default().fg(Color::DarkGray)),
                             ])
                             .right_aligned(),
                         ),
@@ -708,13 +723,6 @@ pub fn draw_interface_mode(
                     Span::styled(uptime, Style::default().fg(Color::Cyan)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Interfaces    : ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(
-                        format!("{}", data.len()),
-                        Style::default().fg(Color::Yellow),
-                    ),
-                ]),
-                Line::from(vec![
                     Span::styled("  Total RX      : ", Style::default().fg(Color::DarkGray)),
                     Span::styled(summary_rx_val, Style::default().fg(Color::Green)),
                 ]),
@@ -743,7 +751,7 @@ pub fn draw_interface_mode(
                                     .fg(Color::Cyan)
                                     .add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled(" (k) ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(" (K) ", Style::default().fg(Color::DarkGray)),
                         ])
                         .right_aligned(),
                     ),
@@ -754,14 +762,40 @@ pub fn draw_interface_mode(
         }
     }
 
-    let mut state_counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut state_counts: std::collections::BTreeMap<&str, usize> =
+        std::collections::BTreeMap::new();
+
     for conn in tcp_data.iter() {
         let state = tcp_state_name(conn.state);
         *state_counts.entry(state).or_insert(0) += 1;
+
+        let ip = conn.remote_ip;
+
+        if ip == [0, 0, 0, 0] || ip == [127, 0, 0, 1] {
+            continue;
+        }
+
+        let needs_lookup = {
+            let cache = app.hostname_cache_arc.lock().unwrap();
+            !cache.contains_key(&ip)
+        };
+
+        if needs_lookup {
+            app.hostname_cache_arc
+                .lock()
+                .unwrap()
+                .insert(ip, "resolving...".to_string());
+
+            let cache = Arc::clone(&app.hostname_cache_arc);
+            std::thread::spawn(move || {
+                let hostname = resolve_hostname(&ip);
+                cache.lock().unwrap().insert(ip, hostname);
+            });
+        }
     }
 
     let tcp_split =
-        Layout::horizontal([Constraint::Length(35), Constraint::Fill(1)]).split(tcp_area);
+        Layout::horizontal([Constraint::Length(25), Constraint::Fill(1)]).split(tcp_area);
 
     let mut summary_lines = vec![
         Line::from("  Connections").style(Style::default().fg(Color::Yellow)),
@@ -811,55 +845,89 @@ pub fn draw_interface_mode(
             let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
             let remote_addr = format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
             let state = tcp_state_name(conn.state);
-            let timer = format_timer(conn.timer_active);
 
+            let hostname = app
+                .hostname_cache_arc
+                .lock()
+                .unwrap()
+                .get(&conn.remote_ip)
+                .unwrap_or(&String::new())
+                .to_string();
             let state_style = match state {
-                "ESTABLISHED" => Style::default().fg(Color::Green),
-                "LISTEN" => Style::default().fg(Color::Cyan),
-                "TIME_WAIT" => Style::default().fg(Color::Yellow),
-                "CLOSE_WAIT" => Style::default().fg(Color::Magenta),
-                "SYN_SENT" | "SYN_RECV" => Style::default().fg(Color::Blue),
-                "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(Color::LightYellow),
-                _ => Style::default().fg(Color::White),
+                "ESTABLISHED" => Style::default().fg(Color::Rgb(100, 200, 100)),
+                "LISTEN" => Style::default().fg(Color::Rgb(100, 150, 200)),
+                "TIME_WAIT" => Style::default().fg(Color::Rgb(255, 200, 100)),
+                "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 150, 200)),
+                "SYN_SENT" | "SYN_RECV" => Style::default().fg(Color::Rgb(150, 150, 200)),
+                "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(Color::Rgb(255, 220, 150)),
+                _ => Style::default().fg(Color::Rgb(150, 150, 150)),
             };
 
             let queue_style = if conn.tx_queue > 0 || conn.rx_queue > 0 {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Rgb(255, 200, 100))
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Rgb(80, 80, 80))
             };
 
             Row::new(vec![
-                Cell::from(format!(" {}", local_addr)),
-                Cell::from(format!(" {}", remote_addr)),
+                Cell::from(Span::styled(
+                    format!(" {}", local_addr),
+                    Style::default().fg(Color::Rgb(180, 180, 180)),
+                )),
+                Cell::from(Span::styled(
+                    format!(" {}", remote_addr),
+                    Style::default().fg(Color::Rgb(180, 180, 180)),
+                )),
+                Cell::from(Span::styled(
+                    format!(" {}", hostname),
+                    Style::default().fg(Color::Rgb(139, 233, 253)), // Cyan for hostname
+                )),
                 Cell::from(Span::styled(format!(" {}", state), state_style)),
                 Cell::from(Span::styled(
                     format!(" {}:{}", conn.tx_queue, conn.rx_queue),
                     queue_style,
                 )),
-                Cell::from(format!(" {}", conn.uid)),
-                Cell::from(format!(" {}", conn.inode)),
+                Cell::from(Span::styled(
+                    format!(" {}", conn.uid),
+                    Style::default().fg(Color::Rgb(120, 120, 120)),
+                )),
+                Cell::from(Span::styled(
+                    format!(" {}", conn.inode),
+                    Style::default().fg(Color::Rgb(120, 120, 120)),
+                )),
             ])
         })
         .collect();
+    app.tcp_vertical_scroll_state = app.tcp_vertical_scroll_state.content_length(tcp_data.len());
+
+    let visible_rows = (tcp_split[1].height as usize).saturating_sub(4);
+    let scroll_offset = app.tcp_vertical_scroll;
+
+    let visible_tcp_rows: Vec<Row> = tcp_rows
+        .into_iter()
+        .skip(scroll_offset)
+        .take(visible_rows)
+        .collect();
 
     let tcp_table = Table::new(
-        tcp_rows,
+        visible_tcp_rows,
         [
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Length(12),
-            Constraint::Length(10),
-            Constraint::Length(6),
-            Constraint::Fill(1),
+            Constraint::Percentage(20), // Local Address (reduced)
+            Constraint::Percentage(20), // Remote Address (reduced)
+            Constraint::Percentage(25), // Hostname (NEW)
+            Constraint::Length(12),     // State
+            Constraint::Length(10),     // TX:RX
+            Constraint::Length(6),      // UID
+            Constraint::Fill(1),        // Inode
         ],
     )
     .header(
         Row::new(vec![
             Cell::from(" Local Address"),
             Cell::from(" Remote Address"),
+            Cell::from(" Hostname"), // NEW COLUMN
             Cell::from(" State"),
             Cell::from(" TX:RX"),
             Cell::from(" UID"),
@@ -874,16 +942,37 @@ pub fn draw_interface_mode(
     .block(
         Block::bordered()
             .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(120, 120, 120)))
             .title(format!(" 🔌 TCP CONNECTIONS ({}) ", tcp_data.len()))
             .title_style(
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(tcp_border_color)
                     .add_modifier(Modifier::BOLD),
             )
-            .padding(ratatui::widgets::Padding::horizontal(1)),
+            .padding(ratatui::widgets::Padding {
+                left: 1,
+                right: 2,
+                top: 0,
+                bottom: 0,
+            }),
     );
 
     frame.render_widget(tcp_table, tcp_split[1]);
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(None)
+            .thumb_symbol("┃")
+            .style(Style::default().fg(Color::Rgb(200, 200, 200))),
+        tcp_split[1].inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut app.tcp_vertical_scroll_state,
+    );
+
     if app.show_help {
         render_help_popup(frame);
     }
@@ -953,7 +1042,7 @@ fn render_help_popup(frame: &mut Frame) {
             Span::raw("Binary byte unit (KiB, MiB, GiB)"),
         ]),
         Line::from(vec![
-            Span::styled("    k               ", Style::default().fg(Color::Green)),
+            Span::styled("    K               ", Style::default().fg(Color::Green)),
             Span::raw("Update tick rate"),
         ]),
         Line::from(""),
@@ -1035,114 +1124,21 @@ fn make_bar(percent: f64, width: usize) -> String {
     format!("{}{}", "█".repeat(filled), "░".repeat(empty))
 }
 
-fn extract_speed(data_str: &str) -> String {
-    data_str
-        .split("speed: ")
-        .nth(1)
-        .unwrap_or("0 B/s")
-        .trim()
-        .to_string()
-}
-
-fn extract_speed_from_line(line: &Line) -> String {
-    let text: String = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect();
-    extract_speed(&text)
-}
-
-fn parse_speed_for_bar(speed_str: &str) -> f64 {
-    let link_speed_mbps = 5.0;
-
-    if speed_str.contains("GB/s") {
-        let val: f64 = speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0);
-        (val * 1000.0 / link_speed_mbps).min(1.0)
-    } else if speed_str.contains("MB/s") {
-        let val: f64 = speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0);
-        (val / link_speed_mbps).min(1.0)
-    } else if speed_str.contains("KB/s") {
-        let val: f64 = speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0);
-        (val / 1000.0 / link_speed_mbps).min(1.0)
-    } else {
-        0.0
+fn resolve_hostname(ip: &[u8; 4]) -> String {
+    if ip == &[0, 0, 0, 0] || ip == &[127, 0, 0, 1] {
+        return "-".to_string();
     }
-}
-fn parse_speed_to_mbps(speed_str: &str) -> f64 {
-    if speed_str.contains("GB/s") {
-        speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0)
-            * 1000.0
-    } else if speed_str.contains("MB/s") {
-        speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0)
-    } else if speed_str.contains("KB/s") {
-        speed_str
-            .split_whitespace()
-            .next()
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0)
-            / 1000.0
-    } else {
-        0.0
-    }
-}
-fn format_ip(ip: &[u8; 4]) -> String {
-    format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3])
-}
 
-fn tcp_state_name(state: u64) -> &'static str {
-    match state {
-        0x01 => "ESTABLISHED",
-        0x02 => "SYN_SENT",
-        0x03 => "SYN_RECV",
-        0x04 => "FIN_WAIT1",
-        0x05 => "FIN_WAIT2",
-        0x06 => "TIME_WAIT",
-        0x07 => "CLOSE",
-        0x08 => "CLOSE_WAIT",
-        0x09 => "LAST_ACK",
-        0x0A => "LISTEN",
-        0x0B => "CLOSING",
-        _ => "UNKNOWN",
-    }
-}
+    let ip_addr = IpAddr::V4(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]));
 
-fn format_timer(timer_active: u64) -> &'static str {
-    match timer_active {
-        0 => "off",
-        1 => "on",
-        2 => "keepalive",
-        3 => "timewait",
-        4 => "probe",
-        _ => "unknown",
-    }
-}
-fn format_speed_mbps(mbps: f64) -> String {
-    if mbps >= 1000.0 {
-        format!("{:.2} GB/s", mbps / 1000.0)
-    } else if mbps >= 1.0 {
-        format!("{:.2} MB/s", mbps)
-    } else {
-        format!("{:.2} KB/s", mbps * 1000.0)
+    match dns_lookup::lookup_addr(&ip_addr) {
+        std::result::Result::Ok(hostname) => {
+            if hostname.len() > 30 {
+                format!("{}...", &hostname[..27])
+            } else {
+                hostname
+            }
+        }
+        Err(_) => "-".to_string(),
     }
 }
