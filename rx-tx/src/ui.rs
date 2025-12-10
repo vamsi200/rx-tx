@@ -36,6 +36,70 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
+pub fn draw_speed_edit_popup(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+
+    let popup_area = Layout::vertical([
+        Constraint::Percentage(40),
+        Constraint::Length(8),
+        Constraint::Percentage(40),
+    ])
+    .split(area)[1];
+
+    let popup_area = Layout::horizontal([
+        Constraint::Percentage(25),
+        Constraint::Percentage(50),
+        Constraint::Percentage(25),
+    ])
+    .split(popup_area)[1];
+
+    let (title, field_name, color) = if app.edit_rx_mode {
+        (" ⬇ Set Download Speed ", "Download (Mbps)", Color::Green)
+    } else {
+        (" ⬆ Set Upload Speed ", "Upload (Mbps)", Color::Blue)
+    };
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!(
+                "  Interface: {}",
+                app.editing_interface.as_ref().unwrap_or(&"".to_string())
+            ),
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("  {}: ", field_name), Style::default().fg(color)),
+            Span::styled(
+                &app.speed_input,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("█", Style::default().fg(Color::Yellow)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Enter: Save | Esc: Cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    let popup = Paragraph::new(text)
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(color))
+                .title(title)
+                .title_style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+        )
+        .alignment(Alignment::Left);
+
+    frame.render_widget(Clear, popup_area);
+    frame.render_widget(popup, popup_area);
+}
+
 fn draw_tick_mode(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
@@ -185,8 +249,9 @@ pub fn draw_interface_mode(
                             .unwrap_or(Line::from("0 B/s")),
                     );
 
-                    let rx_load = parse_speed(&rx_speed_str, Some(5.0));
-                    let tx_load = parse_speed(&tx_speed_str, Some(5.0));
+                    let rx_load = parse_speed(&rx_speed_str, None);
+                    let tx_load = parse_speed(&tx_speed_str, None);
+
                     let is_active = rx_load > 0.01 || tx_load > 0.01;
 
                     let activity = if is_active {
@@ -274,8 +339,8 @@ pub fn draw_interface_mode(
                             .unwrap_or(Line::from("0 B/s")),
                     );
 
-                    let rx_load = parse_speed(&rx_speed_str, Some(5.0));
-                    let tx_load = parse_speed(&tx_speed_str, Some(5.0));
+                    let rx_load = parse_speed(&rx_speed_str, None);
+                    let tx_load = parse_speed(&tx_speed_str, None);
                     let is_active = rx_load > 0.01 || tx_load > 0.01;
 
                     let activity = if is_active {
@@ -353,8 +418,6 @@ pub fn draw_interface_mode(
                 );
 
                 let bar_width = (detail_area.width as usize).saturating_sub(30);
-                let rx_load = parse_speed(&rx_speed_str, Some(5.0));
-                let tx_load = parse_speed(&tx_speed_str, Some(5.0));
 
                 let detail_chunks = Layout::vertical([
                     Constraint::Length(5),
@@ -380,6 +443,12 @@ pub fn draw_interface_mode(
 
                 *rx_avg = (*rx_avg * 0.95) + (rx_current * 0.05);
                 *tx_avg = (*tx_avg * 0.95) + (tx_current * 0.05);
+
+                let rx_speed = app.get_rx_limit(&interface_data.name);
+                let tx_speed = app.get_tx_limit(&interface_data.name);
+
+                let rx_load = parse_speed(&rx_speed_str, Some(rx_speed));
+                let tx_load = parse_speed(&tx_speed_str, Some(tx_speed));
 
                 let rx_peak_str = format_speed_mbps(*rx_peak);
                 let rx_avg_str = format_speed_mbps(*rx_avg);
@@ -429,9 +498,22 @@ pub fn draw_interface_mode(
                         ])
                         .title_top(
                             Line::from(vec![
-                                Span::styled(" Tick: ", Style::default().fg(Color::DarkGray)),
+                                Span::styled(" Link Speed: ", Style::default().fg(Color::DarkGray)),
                                 Span::styled(
-                                    tick_display,
+                                    format!(
+                                        "{} Mbps",
+                                        app.interface_speeds
+                                            .get(&selected_name)
+                                            .map(|(rx, _)| format!("{:.0}", rx))
+                                            .unwrap_or("?".to_string())
+                                    ),
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(" │ Tick: ", Style::default().fg(Color::DarkGray)),
+                                Span::styled(
+                                    tick_display.clone(),
                                     Style::default()
                                         .fg(Color::Cyan)
                                         .add_modifier(Modifier::BOLD),
@@ -485,7 +567,26 @@ pub fn draw_interface_mode(
                             Span::styled(tx_avg_str, Style::default().fg(Color::Cyan)),
                             Span::raw(" "),
                         ])
-                        .blue(),
+                        .blue()
+                        .title_top(
+                            Line::from(vec![
+                                Span::styled(" Link Speed: ", Style::default().fg(Color::DarkGray)),
+                                Span::styled(
+                                    format!(
+                                        "{} Mbps",
+                                        app.interface_speeds
+                                            .get(&selected_name)
+                                            .map(|(_, tx)| format!("{:.0}", tx))
+                                            .unwrap_or("?".to_string())
+                                    ),
+                                    Style::default()
+                                        .fg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                                Span::raw(" "),
+                            ])
+                            .right_aligned(),
+                        ),
                 );
                 frame.render_widget(tx_para, detail_chunks[1]);
 
@@ -882,7 +983,7 @@ pub fn draw_interface_mode(
                 )),
                 Cell::from(Span::styled(
                     format!(" {}", hostname),
-                    Style::default().fg(Color::Rgb(139, 233, 253)), // Cyan for hostname
+                    Style::default().fg(Color::Rgb(139, 233, 253)),
                 )),
                 Cell::from(Span::styled(format!(" {}", state), state_style)),
                 Cell::from(Span::styled(
@@ -927,7 +1028,7 @@ pub fn draw_interface_mode(
         Row::new(vec![
             Cell::from(" Local Address"),
             Cell::from(" Remote Address"),
-            Cell::from(" Hostname"), // NEW COLUMN
+            Cell::from(" Hostname"),
             Cell::from(" State"),
             Cell::from(" TX:RX"),
             Cell::from(" UID"),
@@ -978,6 +1079,9 @@ pub fn draw_interface_mode(
     }
     if app.enter_tick_active {
         draw_tick_mode(frame, app);
+    }
+    if app.edit_rx_mode || app.edit_tx_mode {
+        draw_speed_edit_popup(frame, app);
     }
 }
 

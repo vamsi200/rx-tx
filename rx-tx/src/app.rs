@@ -25,10 +25,16 @@ use std::vec;
 
 #[derive(Clone, Debug)]
 pub struct App {
+    pub main_tab_focus: bool,
+    pub interface_speeds: HashMap<String, (f64, f64)>,
+    pub edit_rx_mode: bool,
+    pub edit_tx_mode: bool,
+    pub speed_input: String,
+    pub speed_input_field: SpeedInputField,
+    pub editing_interface: Option<String>,
     pub hostname_cache_arc: Arc<Mutex<HashMap<[u8; 4], String>>>,
     pub show_help: bool,
     pub enter_tick_active: bool,
-    pub interface_name: String,
     pub tick_rate: Duration,
     pub tick_value: String,
     pub mode: Mode,
@@ -52,16 +58,28 @@ pub struct App {
     pub focus: Focus,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpeedInputField {
+    RX,
+    TX,
+}
+
 impl Default for App {
     fn default() -> Self {
         Self {
+            speed_input_field: SpeedInputField::RX,
+            main_tab_focus: true,
+            interface_speeds: get_interface_speed(),
+            edit_tx_mode: false,
+            edit_rx_mode: false,
+            speed_input: String::new(),
+            editing_interface: None,
             hostname_cache_arc: Arc::new(Mutex::new(HashMap::new())),
             focus: Focus::Interfaces,
             show_help: false,
             tick_value: String::new(),
             enter_tick_active: false,
             tick_rate: Duration::from_millis(1800),
-            interface_name: String::new(),
             selection_state: {
                 let mut state = ListState::default();
                 state.select(Some(0));
@@ -153,6 +171,7 @@ impl App {
 
         Ok(())
     }
+
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         let mut last_tick = Instant::now();
         let interface_name_vec: Vec<String> = parse_proc_net_dev()?
@@ -179,11 +198,42 @@ impl App {
                 if let Event::Key(key) = event::read()? {
                     match &mut self.mode {
                         Mode::Normal => match key.code {
+                            KeyCode::Char('R') => {
+                                if let InterfaceSelected::Interface(ref name) =
+                                    self.selected_interface
+                                {
+                                    self.edit_rx_mode = true;
+                                    self.editing_interface = Some(name.clone());
+
+                                    if let Some((rx, _)) = self.interface_speeds.get(name) {
+                                        self.speed_input = rx.to_string();
+                                    } else {
+                                        self.speed_input.clear();
+                                    }
+                                }
+                            }
+                            KeyCode::Char('T') => {
+                                if let InterfaceSelected::Interface(ref name) =
+                                    self.selected_interface
+                                {
+                                    self.edit_tx_mode = true;
+                                    self.editing_interface = Some(name.clone());
+
+                                    if let Some((_, tx)) = self.interface_speeds.get(name) {
+                                        self.speed_input = tx.to_string();
+                                    } else {
+                                        self.speed_input.clear();
+                                    }
+                                }
+                            }
+
                             KeyCode::Tab => {
-                                self.focus = match self.focus {
-                                    Focus::Interfaces => Focus::TcpTable,
-                                    Focus::TcpTable => Focus::Interfaces,
-                                };
+                                if self.main_tab_focus {
+                                    self.focus = match self.focus {
+                                        Focus::Interfaces => Focus::TcpTable,
+                                        Focus::TcpTable => Focus::Interfaces,
+                                    };
+                                }
                             }
                             KeyCode::Char('f') => {
                                 self.mode = Mode::SelectingInterface {
@@ -300,6 +350,75 @@ impl App {
                             _ => {}
                         }
                     }
+                    if self.edit_rx_mode {
+                        match key.code {
+                            KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
+                                self.speed_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                self.speed_input.pop();
+                            }
+                            KeyCode::Enter => {
+                                if let Some(ref interface) = self.editing_interface {
+                                    if let Ok(rx) = self.speed_input.parse::<f64>() {
+                                        if rx > 0.0 {
+                                            let tx = self
+                                                .interface_speeds
+                                                .get(interface)
+                                                .map(|(_, tx)| *tx)
+                                                .unwrap_or(rx);
+
+                                            self.interface_speeds
+                                                .insert(interface.clone(), (rx, tx));
+                                            let _ = save_interface_speeds(&self.interface_speeds);
+                                        }
+                                    }
+                                }
+                                self.edit_rx_mode = false;
+                                self.editing_interface = None;
+                            }
+                            KeyCode::Esc => {
+                                self.edit_rx_mode = false;
+                                self.editing_interface = None;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if self.edit_tx_mode {
+                        match key.code {
+                            KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
+                                self.speed_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                self.speed_input.pop();
+                            }
+                            KeyCode::Enter => {
+                                if let Some(ref interface) = self.editing_interface {
+                                    if let Ok(tx) = self.speed_input.parse::<f64>() {
+                                        if tx > 0.0 {
+                                            let rx = self
+                                                .interface_speeds
+                                                .get(interface)
+                                                .map(|(rx, _)| *rx)
+                                                .unwrap_or(tx);
+
+                                            self.interface_speeds
+                                                .insert(interface.clone(), (rx, tx));
+                                            let _ = save_interface_speeds(&self.interface_speeds);
+                                        }
+                                    }
+                                }
+                                self.edit_tx_mode = false;
+                                self.editing_interface = None;
+                            }
+                            KeyCode::Esc => {
+                                self.edit_tx_mode = false;
+                                self.editing_interface = None;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
 
@@ -309,6 +428,20 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    pub fn get_rx_limit(&self, interface: &str) -> f64 {
+        self.interface_speeds
+            .get(interface)
+            .map(|(rx, _)| *rx / 8.0)
+            .unwrap_or(125.0) // Default is 125Mbps btw
+    }
+
+    pub fn get_tx_limit(&self, interface: &str) -> f64 {
+        self.interface_speeds
+            .get(interface)
+            .map(|(_, tx)| *tx / 8.0)
+            .unwrap_or(125.0) // Default is 125Mbps btw
     }
 
     pub fn scroll_up(&mut self) {

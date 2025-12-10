@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::models::{self, *};
 use anyhow::{anyhow, Error, Ok, Result};
+use clap::builder::Str;
 use core::net;
 use crossterm::event::{self, Event};
 use ratatui::crossterm::event::read;
@@ -10,9 +11,10 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::Terminal;
 use ratatui::{text::Text, Frame};
+use std::collections::HashMap;
 use std::fmt::format;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
 use std::thread::{self, sleep};
@@ -350,4 +352,48 @@ pub fn parse_uptime() -> Result<String> {
     let secs = uptime_secs % 60;
     let out_string = format!("{hours}:{minutes}:{secs}");
     Ok(out_string)
+}
+
+// Option for user to write to the interface_speed.txt file in `iface;rx_top_speed;tx_top_speed` format and this function will just get the information.
+pub fn get_interface_speed() -> HashMap<String, (f64, f64)> {
+    let mut map: HashMap<String, (f64, f64)> = HashMap::new();
+
+    let mut file = match OpenOptions::new().read(true).open("./interface_speed.txt") {
+        std::result::Result::Ok(f) => f,
+        Err(_) => return map,
+    };
+
+    let mut buf = String::new();
+    if file.read_to_string(&mut buf).is_err() {
+        return map;
+    }
+
+    for line in buf.lines() {
+        let parts: Vec<&str> = line.split(';').collect();
+        if parts.len() == 3 {
+            let interface_name = parts[0].trim();
+            let rx_speed = parts[1].trim().parse::<f64>().unwrap_or(0.0);
+            let tx_speed = parts[2].trim().parse::<f64>().unwrap_or(0.0);
+
+            if !interface_name.is_empty() && rx_speed > 0.0 && tx_speed > 0.0 {
+                map.insert(interface_name.to_string(), (rx_speed, tx_speed));
+            }
+        }
+    }
+    map
+}
+
+// Makes Changes to `interface_speed.txt` file - those information will be taken from the TUI.
+pub fn save_interface_speeds(map: &HashMap<String, (f64, f64)>) -> Result<(), Error> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("./interface_speed.txt")?;
+
+    for (i_name, (rx, tx)) in map {
+        writeln!(file, "{};{};{}", i_name, rx, tx)?;
+    }
+
+    Ok(())
 }
