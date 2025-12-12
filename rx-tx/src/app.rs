@@ -25,6 +25,7 @@ use std::vec;
 
 #[derive(Clone, Debug)]
 pub struct App {
+    pub overview_capacity: usize,
     pub main_tab_focus: bool,
     pub interface_speeds: HashMap<String, (f64, f64)>,
     pub edit_rx_mode: bool,
@@ -56,6 +57,9 @@ pub struct App {
     pub tcp_vertical_scroll_state: ScrollbarState,
     pub tcp_vertical_scroll: usize,
     pub focus: Focus,
+    pub total_rx_history: Vec<u64>,
+    pub total_tx_history: Vec<u64>,
+    pub history_capacity: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +71,10 @@ pub enum SpeedInputField {
 impl Default for App {
     fn default() -> Self {
         Self {
+            overview_capacity: 0,
+            total_rx_history: Vec::new(),
+            total_tx_history: Vec::new(),
+            history_capacity: 120,
             speed_input_field: SpeedInputField::RX,
             main_tab_focus: true,
             interface_speeds: get_interface_speed(),
@@ -170,6 +178,23 @@ impl App {
         self.prev_stats = Some(net_vec_stats);
 
         Ok(())
+    }
+
+    pub fn push_total_vals(&mut self, total_rx_mbs: f64, total_tx_mbs: f64) {
+        let rx = total_rx_mbs.max(0.0).round() as u64;
+        let tx = total_tx_mbs.max(0.0).round() as u64;
+
+        self.total_rx_history.push(rx);
+        self.total_tx_history.push(tx);
+
+        if self.total_rx_history.len() > self.history_capacity {
+            let excess = self.total_rx_history.len() - self.history_capacity;
+            self.total_rx_history.drain(0..excess);
+        }
+        if self.total_tx_history.len() > self.history_capacity {
+            let excess = self.total_tx_history.len() - self.history_capacity;
+            self.total_tx_history.drain(0..excess);
+        }
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
@@ -424,6 +449,20 @@ impl App {
 
             if last_tick.elapsed() >= self.tick_rate {
                 self.get_stuff(terminal)?;
+
+                let rx: f64 = self
+                    .rx_data
+                    .values()
+                    .map(|v| v.last().map(|(_, b)| *b).unwrap_or(0.0))
+                    .sum();
+
+                let tx: f64 = self
+                    .tx_data
+                    .values()
+                    .map(|v| v.last().map(|(_, b)| *b).unwrap_or(0.0))
+                    .sum();
+
+                self.push_total_vals(rx, tx);
                 last_tick = Instant::now();
             }
         }

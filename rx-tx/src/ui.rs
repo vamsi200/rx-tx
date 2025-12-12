@@ -15,7 +15,9 @@ use ratatui::text::{Line, Masked, Span};
 use ratatui::widgets::block::title;
 use ratatui::widgets::Cell;
 use ratatui::widgets::Clear;
+use ratatui::widgets::RenderDirection;
 use ratatui::widgets::Row;
+use ratatui::widgets::Sparkline;
 use ratatui::widgets::Table;
 use ratatui::widgets::Wrap;
 use ratatui::widgets::{
@@ -35,6 +37,106 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NetTotals {
+    pub total_rx_bytes: u64,
+    pub total_tx_bytes: u64,
+    pub total_bytes: u64,
+
+    pub total_rx_packets: u64,
+    pub total_tx_packets: u64,
+    pub total_packets: u64,
+
+    pub rx_tx_bytes_ratio: f64,
+    pub rx_tx_packets_ratio: f64,
+
+    pub total_rx_errors: u64,
+    pub total_tx_errors: u64,
+    pub total_errors: u64,
+
+    pub total_rx_drops: u64,
+    pub total_tx_drops: u64,
+    pub total_drops: u64,
+
+    pub error_rate_pct: f64,
+    pub drop_rate_pct: f64,
+}
+
+pub fn compute_totals(data: &[NetworkStats]) -> NetTotals {
+    let mut totals = NetTotals::default();
+
+    for iface in data {
+        totals.total_rx_bytes += iface.receive.bytes;
+        totals.total_tx_bytes += iface.transmit.bytes;
+
+        totals.total_rx_packets += iface.receive.packets;
+        totals.total_tx_packets += iface.transmit.packets;
+
+        totals.total_rx_errors += iface.receive.errs;
+        totals.total_tx_errors += iface.transmit.errs;
+
+        totals.total_rx_drops += iface.receive.drop;
+        totals.total_tx_drops += iface.transmit.drop;
+    }
+
+    totals.total_bytes = totals.total_rx_bytes + totals.total_tx_bytes;
+    totals.total_packets = totals.total_rx_packets + totals.total_tx_packets;
+
+    totals.total_errors = totals.total_rx_errors + totals.total_tx_errors;
+    totals.total_drops = totals.total_rx_drops + totals.total_tx_drops;
+
+    if totals.total_tx_bytes > 0 {
+        totals.rx_tx_bytes_ratio = totals.total_rx_bytes as f64 / totals.total_tx_bytes as f64;
+    }
+
+    if totals.total_tx_packets > 0 {
+        totals.rx_tx_packets_ratio =
+            totals.total_rx_packets as f64 / totals.total_tx_packets as f64;
+    }
+
+    if totals.total_packets > 0 {
+        totals.error_rate_pct = totals.total_errors as f64 * 100.0 / totals.total_packets as f64;
+        totals.drop_rate_pct = totals.total_drops as f64 * 100.0 / totals.total_packets as f64;
+    }
+
+    totals
+}
+
+fn render_overview_graph(frame: &mut Frame, area: Rect, app: &App) {
+    let rows =
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+
+    let rx_data = &app.total_rx_history;
+    let tx_data = &app.total_tx_history;
+
+    let rx_spark = Sparkline::default()
+        .block(
+            Block::bordered()
+                .title(" RX (MB/s) ")
+                .title_alignment(ratatui::layout::Alignment::Left),
+        )
+        .data(rx_data)
+        .style(Style::default().fg(Color::Green))
+        .max(rx_data.iter().copied().max().unwrap_or(0))
+        .direction(RenderDirection::LeftToRight)
+        .absent_value_symbol(symbols::line::HORIZONTAL);
+
+    let tx_spark = Sparkline::default()
+        .block(
+            Block::bordered()
+                .title(" TX (MB/s) ")
+                .title_alignment(ratatui::layout::Alignment::Left),
+        )
+        .data(tx_data)
+        .style(Style::default().fg(Color::Blue))
+        .max(tx_data.iter().copied().max().unwrap_or(0))
+        .direction(RenderDirection::LeftToRight)
+        .absent_value_symbol(symbols::line::HORIZONTAL);
+
+    frame.render_widget(rx_spark, rows[0]);
+    frame.render_widget(tx_spark, rows[1]);
+}
 
 pub fn draw_speed_edit_popup(frame: &mut Frame, app: &App) {
     let area = frame.area();
@@ -801,6 +903,7 @@ pub fn draw_interface_mode(
             let total_rx: u64 = data.iter().map(|i| i.receive.bytes).sum();
             let total_tx: u64 = data.iter().map(|i| i.transmit.bytes).sum();
             let total_packets: u64 = data.iter().map(|i| i.receive.packets).sum();
+
             let summary_tx_val = if app.raw_bytes {
                 total_tx.to_string()
             } else {
@@ -812,6 +915,25 @@ pub fn draw_interface_mode(
                 format_bytes(total_rx, &byte_unit)
             };
 
+            let cols = Layout::horizontal([Constraint::Percentage(45), Constraint::Fill(1)])
+                .split(detail_area);
+
+            let left_area = cols[0];
+            let right_area = cols[1];
+
+            let totals = compute_totals(data);
+
+            let summary_rx_val = if app.raw_bytes {
+                totals.total_rx_bytes.to_string()
+            } else {
+                format_bytes(totals.total_rx_bytes, &byte_unit)
+            };
+            let summary_tx_val = if app.raw_bytes {
+                totals.total_tx_bytes.to_string()
+            } else {
+                format_bytes(totals.total_tx_bytes, &byte_unit)
+            };
+
             let summary = Paragraph::new(vec![
                 Line::from(Span::styled(
                     "  ALL INTERFACES",
@@ -820,22 +942,120 @@ pub fn draw_interface_mode(
                         .add_modifier(Modifier::BOLD),
                 )),
                 Line::from(vec![
-                    Span::styled("  System Uptime : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "  System Uptime       : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                     Span::styled(uptime, Style::default().fg(Color::Cyan)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Total RX      : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "  Total RX            : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                     Span::styled(summary_rx_val, Style::default().fg(Color::Green)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Total TX      : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        "  Total TX            : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
                     Span::styled(summary_tx_val, Style::default().fg(Color::Blue)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  Total Packets : ", Style::default().fg(Color::DarkGray)),
                     Span::styled(
-                        format!("{}", total_packets),
+                        "  Total Packets       : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("{}", totals.total_packets),
                         Style::default().fg(Color::White),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  Total Errors        : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("{}", totals.total_errors),
+                        if totals.total_errors > 0 {
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::Green)
+                        },
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  Total Drops         : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("{}", totals.total_drops),
+                        if totals.total_drops > 0 {
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::Green)
+                        },
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  Error Rate Ratio      : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        if totals.error_rate_pct > 0.0 {
+                            format!("{:.3}%", totals.error_rate_pct)
+                        } else {
+                            "-".to_string()
+                        },
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  Drop Rate Ratio     : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        if totals.drop_rate_pct > 0.0 {
+                            format!("{:.3}%", totals.drop_rate_pct)
+                        } else {
+                            "-".to_string()
+                        },
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  RX/TX Bytes Ratio   : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        if totals.rx_tx_bytes_ratio > 0.0 {
+                            format!("{:.2}", totals.rx_tx_bytes_ratio)
+                        } else {
+                            "-".to_string()
+                        },
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        "  RX/TX Packets Ratio : ",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        if totals.rx_tx_packets_ratio > 0.0 {
+                            format!("{:.2}", totals.rx_tx_packets_ratio)
+                        } else {
+                            "-".to_string()
+                        },
+                        Style::default().fg(Color::Cyan),
                     ),
                 ]),
             ])
@@ -858,8 +1078,8 @@ pub fn draw_interface_mode(
                     ),
             )
             .alignment(Alignment::Left);
-
-            frame.render_widget(summary, detail_area);
+            frame.render_widget(summary, left_area);
+            render_overview_graph(frame, right_area, app);
         }
     }
 
