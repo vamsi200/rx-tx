@@ -63,6 +63,81 @@ pub struct NetTotals {
     pub drop_rate_pct: f64,
 }
 
+fn draw_tick_mode(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+
+    let popup_area = centered_rect(40, 30, area);
+
+    frame.render_widget(Clear, popup_area);
+
+    let tick_millis = app.tick_rate.as_millis();
+    let current_tick = if tick_millis >= 1000 {
+        format!("{:.1}s", (tick_millis as f64) / 1000.0)
+    } else {
+        format!("{}ms", tick_millis)
+    };
+
+    let tick_text = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Current: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                current_tick,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  New Rate: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if app.tick_value.is_empty() {
+                    "_".to_string()
+                } else {
+                    format!("{}█", app.tick_value)
+                },
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ms", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                "  Enter ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("to apply  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "Esc ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("to cancel", Style::default().fg(Color::DarkGray)),
+        ]),
+    ];
+
+    let tick_popup = Paragraph::new(tick_text)
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Yellow))
+                .title(" ⏱ SET TICK RATE ")
+                .title_style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+        )
+        .alignment(Alignment::Left);
+
+    frame.render_widget(tick_popup, popup_area);
+}
+
 pub fn compute_totals(data: &[NetworkStats]) -> NetTotals {
     let mut totals = NetTotals::default();
 
@@ -202,79 +277,47 @@ pub fn draw_speed_edit_popup(frame: &mut Frame, app: &App) {
     frame.render_widget(popup, popup_area);
 }
 
-fn draw_tick_mode(frame: &mut Frame, app: &App) {
-    let area = frame.area();
+pub fn tcp_matches_filter(
+    conn: &TcpStats,
+    filter: &str,
+    hostname_cache: &HashMap<[u8; 4], String>,
+) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
 
-    let popup_area = centered_rect(40, 30, area);
+    let filter_lower = filter.to_lowercase();
 
-    frame.render_widget(Clear, popup_area);
+    let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
+    if local_addr.to_lowercase().contains(&filter_lower) {
+        return true;
+    }
 
-    let tick_millis = app.tick_rate.as_millis();
-    let current_tick = if tick_millis >= 1000 {
-        format!("{:.1}s", (tick_millis as f64) / 1000.0)
-    } else {
-        format!("{}ms", tick_millis)
-    };
+    let remote_addr = format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
+    if remote_addr.to_lowercase().contains(&filter_lower) {
+        return true;
+    }
 
-    let tick_text = vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  Current: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                current_tick,
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  New Rate: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                if app.tick_value.is_empty() {
-                    "_".to_string()
-                } else {
-                    format!("{}█", app.tick_value)
-                },
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" ms", Style::default().fg(Color::DarkGray)),
-        ]),
-        Line::from(""),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "  Enter ",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("to apply  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                "Esc ",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("to cancel", Style::default().fg(Color::DarkGray)),
-        ]),
-    ];
+    if let Some(hostname) = hostname_cache.get(&conn.remote_ip) {
+        if hostname.to_lowercase().contains(&filter_lower) {
+            return true;
+        }
+    }
 
-    let tick_popup = Paragraph::new(tick_text)
-        .block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Yellow))
-                .title(" ⏱ SET TICK RATE ")
-                .title_style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-        )
-        .alignment(Alignment::Left);
+    let state = tcp_state_name(conn.state);
+    if state.to_lowercase().contains(&filter_lower) {
+        return true;
+    }
 
-    frame.render_widget(tick_popup, popup_area);
+    if format!("{}", conn.uid).contains(&filter_lower) {
+        return true;
+    }
+
+    if format!("{}", conn.inode).contains(&filter_lower) {
+        return true;
+    }
+
+    false
 }
 
 pub fn draw_interface_mode(
@@ -423,7 +466,7 @@ pub fn draw_interface_mode(
                 &mut scrollbar_state,
             );
         }
-        Mode::Normal => {
+        _ => {
             let items: Vec<ListItem> = interface_names
                 .iter()
                 .enumerate()
@@ -486,7 +529,7 @@ pub fn draw_interface_mode(
             );
 
             frame.render_stateful_widget(list, list_area, &mut state);
-            let scroll_bar_state = frame.render_stateful_widget(
+            frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(None)
                     .end_symbol(None)
@@ -628,6 +671,7 @@ pub fn draw_interface_mode(
                 .alignment(Alignment::Left);
 
                 frame.render_widget(rx_para, detail_chunks[0]);
+
                 let tx_para = Paragraph::new(vec![
                     Line::from(""),
                     Line::from(vec![
@@ -900,21 +944,6 @@ pub fn draw_interface_mode(
             }
         }
         InterfaceSelected::All => {
-            let total_rx: u64 = data.iter().map(|i| i.receive.bytes).sum();
-            let total_tx: u64 = data.iter().map(|i| i.transmit.bytes).sum();
-            let total_packets: u64 = data.iter().map(|i| i.receive.packets).sum();
-
-            let summary_tx_val = if app.raw_bytes {
-                total_tx.to_string()
-            } else {
-                format_bytes(total_tx, &byte_unit)
-            };
-            let summary_rx_val = if app.raw_bytes {
-                total_rx.to_string()
-            } else {
-                format_bytes(total_rx, &byte_unit)
-            };
-
             let cols = Layout::horizontal([Constraint::Percentage(45), Constraint::Fill(1)])
                 .split(detail_area);
 
@@ -1004,7 +1033,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Error Rate Ratio      : ",
+                        "  Error Rate Ratio    : ",
                         Style::default().fg(Color::DarkGray),
                     ),
                     Span::styled(
@@ -1083,216 +1112,498 @@ pub fn draw_interface_mode(
         }
     }
 
-    let mut state_counts: std::collections::BTreeMap<&str, usize> =
-        std::collections::BTreeMap::new();
-
-    for conn in tcp_data.iter() {
-        let state = tcp_state_name(conn.state);
-        *state_counts.entry(state).or_insert(0) += 1;
-
-        let ip = conn.remote_ip;
-
-        if ip == [0, 0, 0, 0] || ip == [127, 0, 0, 1] {
-            continue;
-        }
-
-        let needs_lookup = {
-            let cache = app.hostname_cache_arc.lock().unwrap();
-            !cache.contains_key(&ip)
-        };
-
-        if needs_lookup {
-            app.hostname_cache_arc
-                .lock()
-                .unwrap()
-                .insert(ip, "resolving...".to_string());
-
-            let cache = Arc::clone(&app.hostname_cache_arc);
-            std::thread::spawn(move || {
-                let hostname = resolve_hostname(&ip);
-                cache.lock().unwrap().insert(ip, hostname);
-            });
-        }
-    }
-
     let tcp_split =
         Layout::horizontal([Constraint::Length(25), Constraint::Fill(1)]).split(tcp_area);
 
-    let mut summary_lines = vec![
-        Line::from("  Connections").style(Style::default().fg(Color::Yellow)),
-        Line::from(vec![
-            Span::styled("  Total       : ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}", tcp_data.len()),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-    ];
+    match &app.mode {
+        Mode::FilterLocalAddress { filter, index } => {
+            let hostname_cache = app.hostname_cache_arc.lock().unwrap();
+            let mut filtered_tcp: Vec<&TcpStats> = tcp_data
+                .iter()
+                .filter(|conn| tcp_matches_filter(conn, filter, &hostname_cache))
+                .collect();
 
-    for (state, count) in state_counts.iter() {
-        let color = match *state {
-            "ESTABLISHED" => Color::Green,
-            "LISTEN" => Color::Cyan,
-            "TIME_WAIT" => Color::Yellow,
-            _ => Color::White,
-        };
-        summary_lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:<12}: ", state),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(format!("{}", count), Style::default().fg(color)),
-        ]));
-    }
-
-    let summary = Paragraph::new(summary_lines).block(
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .title(" 📊 INFO ")
-            .title_style(
-                Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::BOLD),
-            ),
-    );
-
-    frame.render_widget(summary, tcp_split[0]);
-
-    let tcp_rows: Vec<Row> = tcp_data
-        .iter()
-        .map(|conn| {
-            let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
-            let remote_addr = format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
-            let state = tcp_state_name(conn.state);
-
-            let hostname = app
-                .hostname_cache_arc
-                .lock()
-                .unwrap()
-                .get(&conn.remote_ip)
-                .unwrap_or(&String::new())
-                .to_string();
-            let state_style = match state {
-                "ESTABLISHED" => Style::default().fg(Color::Rgb(100, 200, 100)),
-                "LISTEN" => Style::default().fg(Color::Rgb(100, 150, 200)),
-                "TIME_WAIT" => Style::default().fg(Color::Rgb(255, 200, 100)),
-                "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 150, 200)),
-                "SYN_SENT" | "SYN_RECV" => Style::default().fg(Color::Rgb(150, 150, 200)),
-                "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(Color::Rgb(255, 220, 150)),
-                _ => Style::default().fg(Color::Rgb(150, 150, 150)),
-            };
-
-            let queue_style = if conn.tx_queue > 0 || conn.rx_queue > 0 {
-                Style::default()
-                    .fg(Color::Rgb(255, 200, 100))
-                    .add_modifier(Modifier::BOLD)
+            let display_index = if let Some(selected_idx) = app.selected_index {
+                if selected_idx < filtered_tcp.len() {
+                    filtered_tcp = vec![filtered_tcp[selected_idx]];
+                    0
+                } else {
+                    app.selected_index = None;
+                    *index
+                }
             } else {
-                Style::default().fg(Color::Rgb(80, 80, 80))
+                *index
             };
 
-            Row::new(vec![
-                Cell::from(Span::styled(
-                    format!(" {}", local_addr),
-                    Style::default().fg(Color::Rgb(180, 180, 180)),
-                )),
-                Cell::from(Span::styled(
-                    format!(" {}", remote_addr),
-                    Style::default().fg(Color::Rgb(180, 180, 180)),
-                )),
-                Cell::from(Span::styled(
-                    format!(" {}", hostname),
-                    Style::default().fg(Color::Rgb(139, 233, 253)),
-                )),
-                Cell::from(Span::styled(format!(" {}", state), state_style)),
-                Cell::from(Span::styled(
-                    format!(" {}:{}", conn.tx_queue, conn.rx_queue),
-                    queue_style,
-                )),
-                Cell::from(Span::styled(
-                    format!(" {}", conn.uid),
-                    Style::default().fg(Color::Rgb(120, 120, 120)),
-                )),
-                Cell::from(Span::styled(
-                    format!(" {}", conn.inode),
-                    Style::default().fg(Color::Rgb(120, 120, 120)),
-                )),
-            ])
-        })
-        .collect();
-    app.tcp_vertical_scroll_state = app.tcp_vertical_scroll_state.content_length(tcp_data.len());
+            let mut state_counts: std::collections::BTreeMap<&str, usize> =
+                std::collections::BTreeMap::new();
 
-    let visible_rows = (tcp_split[1].height as usize).saturating_sub(4);
-    let scroll_offset = app.tcp_vertical_scroll;
+            for conn in filtered_tcp.iter() {
+                let state = tcp_state_name(conn.state);
+                *state_counts.entry(state).or_insert(0) += 1;
 
-    let visible_tcp_rows: Vec<Row> = tcp_rows
-        .into_iter()
-        .skip(scroll_offset)
-        .take(visible_rows)
-        .collect();
+                let ip = conn.remote_ip;
+                if ip == [0, 0, 0, 0] || ip == [127, 0, 0, 1] {
+                    continue;
+                }
 
-    let tcp_table = Table::new(
-        visible_tcp_rows,
-        [
-            Constraint::Percentage(20), // Local Address (reduced)
-            Constraint::Percentage(20), // Remote Address (reduced)
-            Constraint::Percentage(25), // Hostname (NEW)
-            Constraint::Length(12),     // State
-            Constraint::Length(10),     // TX:RX
-            Constraint::Length(6),      // UID
-            Constraint::Fill(1),        // Inode
-        ],
-    )
-    .header(
-        Row::new(vec![
-            Cell::from(" Local Address"),
-            Cell::from(" Remote Address"),
-            Cell::from(" Hostname"),
-            Cell::from(" State"),
-            Cell::from(" TX:RX"),
-            Cell::from(" UID"),
-            Cell::from(" Inode"),
-        ])
-        .style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        ),
-    )
-    .block(
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Rgb(120, 120, 120)))
-            .title(format!(" 🔌 TCP CONNECTIONS ({}) ", tcp_data.len()))
-            .title_style(
-                Style::default()
-                    .fg(tcp_border_color)
-                    .add_modifier(Modifier::BOLD),
+                let needs_lookup = !hostname_cache.contains_key(&ip);
+                if needs_lookup {
+                    app.hostname_cache_arc
+                        .lock()
+                        .unwrap()
+                        .insert(ip, "resolving...".to_string());
+
+                    let cache = Arc::clone(&app.hostname_cache_arc);
+                    std::thread::spawn(move || {
+                        let hostname = resolve_hostname(&ip);
+                        cache.lock().unwrap().insert(ip, hostname);
+                    });
+
+                    let hostname_cache = app.hostname_cache_arc.lock().unwrap();
+                }
+            }
+            let mut summary_lines = vec![
+                Line::from("  Connections").style(Style::default().fg(Color::Yellow)),
+                Line::from(vec![
+                    Span::styled("  Total       : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}", tcp_data.len()),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+            ];
+
+            for (state, count) in state_counts.iter() {
+                let color = match *state {
+                    "ESTABLISHED" => Color::Green,
+                    "LISTEN" => Color::Cyan,
+                    "TIME_WAIT" => Color::Yellow,
+                    _ => Color::White,
+                };
+                summary_lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {:<12}: ", state),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(format!("{}", count), Style::default().fg(color)),
+                ]));
+            }
+
+            let summary = Paragraph::new(summary_lines).block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title(" 📊 INFO ")
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+            );
+            frame.render_widget(summary, tcp_split[0]);
+
+            let tcp_rows: Vec<Row> = filtered_tcp
+                .iter()
+                .enumerate()
+                .map(|(i, conn)| {
+                    let is_selected = i == display_index;
+
+                    let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
+                    let remote_addr =
+                        format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
+                    let state = tcp_state_name(conn.state);
+
+                    let hostname = hostname_cache
+                        .get(&conn.remote_ip)
+                        .map(|s| s.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let base_style = Style::default().light_green();
+
+                    let state_style = if is_selected {
+                        base_style.fg(Color::Yellow)
+                    } else {
+                        match state {
+                            "ESTABLISHED" => Style::default().fg(Color::Rgb(100, 200, 100)),
+                            "LISTEN" => Style::default().fg(Color::Rgb(100, 150, 200)),
+                            "TIME_WAIT" => Style::default().fg(Color::Rgb(255, 200, 100)),
+                            "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 150, 200)),
+                            "SYN_SENT" | "SYN_RECV" => {
+                                Style::default().fg(Color::Rgb(150, 150, 200))
+                            }
+                            "FIN_WAIT1" | "FIN_WAIT2" => {
+                                Style::default().fg(Color::Rgb(255, 220, 150))
+                            }
+                            _ => Style::default().fg(Color::Rgb(150, 150, 150)),
+                        }
+                    };
+
+                    let queue_style = if is_selected {
+                        base_style.fg(Color::Yellow)
+                    } else if conn.tx_queue > 0 || conn.rx_queue > 0 {
+                        Style::default()
+                            .fg(Color::Rgb(255, 200, 100))
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::Rgb(80, 80, 80))
+                    };
+
+                    let text_color = if is_selected {
+                        Color::Yellow
+                    } else {
+                        Color::Rgb(180, 180, 180)
+                    };
+
+                    let hostname_color = if is_selected {
+                        Color::Yellow
+                    } else {
+                        Color::Rgb(139, 233, 253)
+                    };
+
+                    Row::new(vec![
+                        Cell::from(Span::styled(
+                            format!(" {}", local_addr),
+                            base_style.fg(text_color),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", remote_addr),
+                            base_style.fg(text_color),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", hostname),
+                            base_style.fg(hostname_color),
+                        )),
+                        Cell::from(Span::styled(format!(" {}", state), state_style)),
+                        Cell::from(Span::styled(
+                            format!(" {}:{}", conn.tx_queue, conn.rx_queue),
+                            queue_style,
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", conn.uid),
+                            base_style.fg(Color::Rgb(120, 120, 120)),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", conn.inode),
+                            base_style.fg(if is_selected {
+                                Color::White
+                            } else {
+                                Color::Rgb(120, 120, 120)
+                            }),
+                        )),
+                    ])
+                })
+                .collect();
+
+            let total_rows = tcp_rows.len();
+            let visible_rows = (tcp_split[1].height as usize).saturating_sub(4);
+
+            let mut scroll_offset = app.tcp_vertical_scroll;
+
+            if *index < scroll_offset {
+                scroll_offset = *index;
+            } else if *index >= scroll_offset + visible_rows {
+                scroll_offset = (*index + 1).saturating_sub(visible_rows);
+            }
+
+            app.tcp_vertical_scroll = scroll_offset;
+            app.tcp_vertical_scroll_state =
+                app.tcp_vertical_scroll_state.content_length(total_rows);
+
+            let visible_tcp_rows: Vec<Row> = tcp_rows
+                .into_iter()
+                .skip(scroll_offset)
+                .take(visible_rows)
+                .collect();
+
+            let title = if filter.is_empty() {
+                format!(" 🔌 TCP FILTER: * (↑ ↓ Enter Esc) ",)
+            } else {
+                format!(" 🔌 TCP FILTER: {} (↑ ↓ Enter Esc) ", filter)
+            };
+
+            let tcp_table = Table::new(
+                visible_tcp_rows,
+                [
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(25),
+                    Constraint::Length(12),
+                    Constraint::Length(10),
+                    Constraint::Length(6),
+                    Constraint::Fill(1),
+                ],
             )
-            .padding(ratatui::widgets::Padding {
-                left: 1,
-                right: 2,
-                top: 0,
-                bottom: 0,
-            }),
-    );
+            .header(
+                Row::new(vec![
+                    Cell::from(" Local Address"),
+                    Cell::from(" Remote Address"),
+                    Cell::from(" Hostname"),
+                    Cell::from(" State"),
+                    Cell::from(" TX:RX"),
+                    Cell::from(" UID"),
+                    Cell::from(" Inode"),
+                ])
+                .style(
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            )
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Color::Red))
+                    .title(title)
+                    .title_style(
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .padding(ratatui::widgets::Padding {
+                        left: 1,
+                        right: 2,
+                        top: 0,
+                        bottom: 0,
+                    }),
+            );
 
-    frame.render_widget(tcp_table, tcp_split[1]);
+            frame.render_widget(tcp_table, tcp_split[1]);
 
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(None)
-            .end_symbol(None)
-            .track_symbol(None)
-            .thumb_symbol("┃")
-            .style(Style::default().fg(Color::Rgb(200, 200, 200))),
-        tcp_split[1].inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        }),
-        &mut app.tcp_vertical_scroll_state,
-    );
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(None)
+                    .thumb_symbol("┃")
+                    .style(Style::default().fg(Color::Yellow)),
+                tcp_split[1].inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut app.tcp_vertical_scroll_state,
+            );
+        }
+
+        _ => {
+            let mut state_counts: std::collections::BTreeMap<&str, usize> =
+                std::collections::BTreeMap::new();
+
+            for conn in tcp_data.iter() {
+                let state = tcp_state_name(conn.state);
+                *state_counts.entry(state).or_insert(0) += 1;
+
+                let ip = conn.remote_ip;
+
+                if ip == [0, 0, 0, 0] || ip == [127, 0, 0, 1] {
+                    continue;
+                }
+
+                let needs_lookup = {
+                    let cache = app.hostname_cache_arc.lock().unwrap();
+                    !cache.contains_key(&ip)
+                };
+
+                if needs_lookup {
+                    app.hostname_cache_arc
+                        .lock()
+                        .unwrap()
+                        .insert(ip, "resolving...".to_string());
+
+                    let cache = Arc::clone(&app.hostname_cache_arc);
+                    std::thread::spawn(move || {
+                        let hostname = resolve_hostname(&ip);
+                        cache.lock().unwrap().insert(ip, hostname);
+                    });
+                }
+            }
+
+            let mut summary_lines = vec![
+                Line::from("  Connections").style(Style::default().fg(Color::Yellow)),
+                Line::from(vec![
+                    Span::styled("  Total       : ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}", tcp_data.len()),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+            ];
+
+            for (state, count) in state_counts.iter() {
+                let color = match *state {
+                    "ESTABLISHED" => Color::Green,
+                    "LISTEN" => Color::Cyan,
+                    "TIME_WAIT" => Color::Yellow,
+                    _ => Color::White,
+                };
+                summary_lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("  {:<12}: ", state),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(format!("{}", count), Style::default().fg(color)),
+                ]));
+            }
+
+            let summary = Paragraph::new(summary_lines).block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title(" 📊 INFO ")
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+            );
+            frame.render_widget(summary, tcp_split[0]);
+
+            let tcp_rows: Vec<Row> = tcp_data
+                .iter()
+                .map(|conn| {
+                    let local_addr = format!("{}:{}", format_ip(&conn.local_ip), conn.local_port);
+                    let remote_addr =
+                        format!("{}:{}", format_ip(&conn.remote_ip), conn.remote_port);
+                    let state = tcp_state_name(conn.state);
+
+                    let hostname = app
+                        .hostname_cache_arc
+                        .lock()
+                        .unwrap()
+                        .get(&conn.remote_ip)
+                        .unwrap_or(&String::new())
+                        .to_string();
+
+                    let state_style = match state {
+                        "ESTABLISHED" => Style::default().fg(Color::Rgb(100, 200, 100)),
+                        "LISTEN" => Style::default().fg(Color::Rgb(100, 150, 200)),
+                        "TIME_WAIT" => Style::default().fg(Color::Rgb(255, 200, 100)),
+                        "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 150, 200)),
+                        "SYN_SENT" | "SYN_RECV" => Style::default().fg(Color::Rgb(150, 150, 200)),
+                        "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(Color::Rgb(255, 220, 150)),
+                        _ => Style::default().fg(Color::Rgb(150, 150, 150)),
+                    };
+
+                    let queue_style = if conn.tx_queue > 0 || conn.rx_queue > 0 {
+                        Style::default()
+                            .fg(Color::Rgb(255, 200, 100))
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::Rgb(80, 80, 80))
+                    };
+
+                    Row::new(vec![
+                        Cell::from(Span::styled(
+                            format!(" {}", local_addr),
+                            Style::default().fg(Color::Rgb(180, 180, 180)),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", remote_addr),
+                            Style::default().fg(Color::Rgb(180, 180, 180)),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", hostname),
+                            Style::default().fg(Color::Rgb(139, 233, 253)),
+                        )),
+                        Cell::from(Span::styled(format!(" {}", state), state_style)),
+                        Cell::from(Span::styled(
+                            format!(" {}:{}", conn.tx_queue, conn.rx_queue),
+                            queue_style,
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", conn.uid),
+                            Style::default().fg(Color::Rgb(120, 120, 120)),
+                        )),
+                        Cell::from(Span::styled(
+                            format!(" {}", conn.inode),
+                            Style::default().fg(Color::Rgb(120, 120, 120)),
+                        )),
+                    ])
+                })
+                .collect();
+
+            let total_rows = tcp_rows.len();
+            app.tcp_vertical_scroll_state =
+                app.tcp_vertical_scroll_state.content_length(total_rows);
+
+            let visible_rows = (tcp_split[1].height as usize).saturating_sub(4);
+            let mut scroll_offset = app.tcp_vertical_scroll;
+            if scroll_offset > total_rows.saturating_sub(visible_rows) {
+                scroll_offset = total_rows.saturating_sub(visible_rows);
+            }
+
+            let visible_tcp_rows: Vec<Row> = tcp_rows
+                .into_iter()
+                .skip(scroll_offset)
+                .take(visible_rows)
+                .collect();
+
+            let tcp_table = Table::new(
+                visible_tcp_rows,
+                [
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(25),
+                    Constraint::Length(12),
+                    Constraint::Length(10),
+                    Constraint::Length(6),
+                    Constraint::Fill(1),
+                ],
+            )
+            .header(
+                Row::new(vec![
+                    Cell::from(" Local Address"),
+                    Cell::from(" Remote Address"),
+                    Cell::from(" Hostname"),
+                    Cell::from(" State"),
+                    Cell::from(" TX:RX"),
+                    Cell::from(" UID"),
+                    Cell::from(" Inode"),
+                ])
+                .style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            )
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Color::Rgb(120, 120, 120)))
+                    .title(format!(" 🔌 TCP CONNECTIONS ({}) ", tcp_data.len()))
+                    .title_style(
+                        Style::default()
+                            .fg(tcp_border_color)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .padding(ratatui::widgets::Padding {
+                        left: 1,
+                        right: 2,
+                        top: 0,
+                        bottom: 0,
+                    }),
+            );
+
+            frame.render_widget(tcp_table, tcp_split[1]);
+
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(None)
+                    .thumb_symbol("┃")
+                    .style(Style::default().fg(Color::Rgb(200, 200, 200))),
+                tcp_split[1].inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut app.tcp_vertical_scroll_state,
+            );
+        }
+    }
 
     if app.show_help {
         render_help_popup(frame);

@@ -17,6 +17,8 @@ use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::char;
 use std::collections::HashMap;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use std::result::Result::Ok;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -40,6 +42,7 @@ pub struct App {
     pub tick_value: String,
     pub mode: Mode,
     pub selection_state: ListState,
+    pub selected_index: Option<usize>,
     pub selected_interface: InterfaceSelected,
     pub prev_stats: Option<Vec<NetworkStats>>,
     pub tcp_stats: Option<Vec<TcpStats>>,
@@ -71,6 +74,7 @@ pub enum SpeedInputField {
 impl Default for App {
     fn default() -> Self {
         Self {
+            selected_index: None,
             overview_capacity: 0,
             total_rx_history: Vec::new(),
             total_tx_history: Vec::new(),
@@ -125,6 +129,7 @@ pub enum ByteUnit {
 pub enum Mode {
     Normal,
     SelectingInterface { filter: String, index: usize },
+    FilterLocalAddress { filter: String, index: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -203,6 +208,12 @@ impl App {
             .iter()
             .map(|s| s.name.clone())
             .collect();
+
+        let local_address_vec: Vec<_> = parse_proc_net_tcp()?
+            .iter()
+            .map(|x| Ipv4Addr::from(x.local_ip).to_string())
+            .collect();
+
         let new_len = interface_name_vec.len();
         self.vertical_scroll_state = self.vertical_scroll_state.content_length(new_len);
         self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(new_len);
@@ -260,12 +271,22 @@ impl App {
                                     };
                                 }
                             }
-                            KeyCode::Char('f') => {
-                                self.mode = Mode::SelectingInterface {
-                                    filter: String::new(),
-                                    index: 0,
+                            KeyCode::Char('f') => match self.focus {
+                                Focus::Interfaces => {
+                                    self.mode = Mode::SelectingInterface {
+                                        filter: String::new(),
+                                        index: 0,
+                                    };
                                 }
-                            }
+                                Focus::TcpTable => {
+                                    self.selected_index = None;
+                                    self.mode = Mode::FilterLocalAddress {
+                                        filter: String::new(),
+                                        index: 0,
+                                    };
+                                }
+                            },
+
                             KeyCode::Char('K') => {
                                 self.enter_tick_active = true;
                                 self.tick_value.clear();
@@ -343,6 +364,52 @@ impl App {
                             KeyCode::Esc => {
                                 self.mode = Mode::Normal;
                                 self.selected_interface = InterfaceSelected::All;
+                            }
+                            _ => {}
+                        },
+                        Mode::FilterLocalAddress { filter, index } => match key.code {
+                            KeyCode::Char(c) => {
+                                filter.push(c);
+                                *index = 0;
+                            }
+                            KeyCode::Backspace => {
+                                filter.pop();
+                                *index = 0;
+                            }
+                            KeyCode::Up => {
+                                if *index > 0 {
+                                    *index -= 1;
+                                }
+                            }
+                            KeyCode::Down => {
+                                let hostname_cache = self.hostname_cache_arc.lock().unwrap();
+                                let filtered_count = self
+                                    .tcp_stats
+                                    .clone()
+                                    .unwrap()
+                                    .iter()
+                                    .filter(|conn| {
+                                        tcp_matches_filter(conn, filter, &hostname_cache)
+                                    })
+                                    .count();
+
+                                if *index + 1 < filtered_count {
+                                    *index += 1;
+                                }
+                            }
+                            KeyCode::Enter => {
+                                if self.selected_index.is_none() {
+                                    self.selected_index = Some(*index);
+                                } else {
+                                    self.selected_index = None;
+                                }
+                            }
+                            KeyCode::Esc => {
+                                if self.selected_index.is_some() {
+                                    self.selected_index = None;
+                                } else {
+                                    self.mode = Mode::Normal;
+                                }
                             }
                             _ => {}
                         },
