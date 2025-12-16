@@ -4,6 +4,7 @@ use crate::parser::*;
 use crate::ui::*;
 use anyhow::{anyhow, Error, Result};
 use clap::builder::Str;
+use crossterm::event::KeyModifiers;
 use crossterm::event::{self, read, Event, KeyCode};
 use crossterm::style::SetStyle;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin};
@@ -327,6 +328,14 @@ impl App {
                             _ => {}
                         },
                         Mode::SelectingInterface { filter, index } => match key.code {
+                            KeyCode::Char('w') => match key.modifiers {
+                                KeyModifiers::CONTROL => {
+                                    filter.clear();
+                                    *index = 0;
+                                }
+                                _ => {}
+                            },
+
                             KeyCode::Char(c) => {
                                 filter.push(c);
                                 *index = 0;
@@ -368,6 +377,14 @@ impl App {
                             _ => {}
                         },
                         Mode::FilterLocalAddress { filter, index } => match key.code {
+                            KeyCode::Char('w') => match key.modifiers {
+                                KeyModifiers::CONTROL => {
+                                    filter.clear();
+                                    *index = 0;
+                                }
+                                _ => {}
+                            },
+
                             KeyCode::Char(c) => {
                                 filter.push(c);
                                 *index = 0;

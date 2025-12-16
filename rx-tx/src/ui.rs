@@ -29,6 +29,7 @@ use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::format;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -1087,6 +1088,15 @@ pub fn draw_interface_mode(
                         Style::default().fg(Color::Cyan),
                     ),
                 ]),
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+                Line::from(vec![Span::styled(
+                    " Press `h` or `?` for help",
+                    Style::default().fg(Color::White),
+                )]),
             ])
             .block(
                 Block::bordered()
@@ -1176,6 +1186,45 @@ pub fn draw_interface_mode(
                 ]),
             ];
 
+            let unique_ips: HashSet<[u8; 4]> = tcp_data
+                .iter()
+                .filter(|c| c.remote_ip != [0, 0, 0, 0] && c.remote_ip != [127, 0, 0, 1])
+                .map(|c| c.remote_ip)
+                .collect();
+
+            let active = tcp_data
+                .iter()
+                .filter(|c| c.tx_queue > 0 || c.rx_queue > 0)
+                .count();
+            let local_only = tcp_data
+                .iter()
+                .filter(|c| c.remote_ip == [127, 0, 0, 1] || c.remote_ip == [0, 0, 0, 0])
+                .count();
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Active      : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", active), Style::default().fg(Color::Green)),
+            ]));
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Unique IPs  : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{}", unique_ips.len()),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Local/Ext   : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", local_only), Style::default().fg(Color::Blue)),
+                Span::raw("/"),
+                Span::styled(
+                    format!("{}", tcp_data.len() - local_only),
+                    Style::default().fg(Color::Magenta),
+                ),
+            ]));
+
+            summary_lines.push(Line::from(""));
             for (state, count) in state_counts.iter() {
                 let color = match *state {
                     "ESTABLISHED" => Color::Green,
@@ -1433,6 +1482,46 @@ pub fn draw_interface_mode(
                 ]),
             ];
 
+            let unique_ips: HashSet<[u8; 4]> = tcp_data
+                .iter()
+                .filter(|c| c.remote_ip != [0, 0, 0, 0] && c.remote_ip != [127, 0, 0, 1])
+                .map(|c| c.remote_ip)
+                .collect();
+
+            let active = tcp_data
+                .iter()
+                .filter(|c| c.tx_queue > 0 || c.rx_queue > 0)
+                .count();
+            let local_only = tcp_data
+                .iter()
+                .filter(|c| c.remote_ip == [127, 0, 0, 1] || c.remote_ip == [0, 0, 0, 0])
+                .count();
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Active      : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", active), Style::default().fg(Color::Green)),
+            ]));
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Unique IPs  : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{}", unique_ips.len()),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
+
+            summary_lines.push(Line::from(vec![
+                Span::styled("  Local/Ext   : ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", local_only), Style::default().fg(Color::Blue)),
+                Span::raw("/"),
+                Span::styled(
+                    format!("{}", tcp_data.len() - local_only),
+                    Style::default().fg(Color::Magenta),
+                ),
+            ]));
+
+            summary_lines.push(Line::from(""));
+
             for (state, count) in state_counts.iter() {
                 let color = match *state {
                     "ESTABLISHED" => Color::Green,
@@ -1619,118 +1708,167 @@ pub fn draw_interface_mode(
 fn render_help_popup(frame: &mut Frame) {
     let area = frame.area();
 
-    let popup_area = centered_rect(70, 85, area);
+    let popup_area = {
+        let vertical =
+            Layout::vertical([Constraint::Percentage(80)]).flex(ratatui::layout::Flex::Center);
+        let horizontal =
+            Layout::horizontal([Constraint::Percentage(70)]).flex(ratatui::layout::Flex::Center);
+        let [area] = vertical.areas(area);
+        let [area] = horizontal.areas(area);
+        area
+    };
 
     frame.render_widget(Clear, popup_area);
 
     let help_text = vec![
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  Keys:",
+            "  GLOBAL",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::from(""),
         Line::from(vec![
-            Span::styled("    ↑ /↓        ", Style::default().fg(Color::Green)),
+            Span::styled("    q         ", Style::default().fg(Color::Cyan)),
+            Span::raw("Quit application"),
+        ]),
+        Line::from(vec![
+            Span::styled("    ?         ", Style::default().fg(Color::Cyan)),
+            Span::raw("Toggle this help menu"),
+        ]),
+        Line::from(vec![
+            Span::styled("    Tab       ", Style::default().fg(Color::Cyan)),
+            Span::raw("Switch focus between Interfaces and TCP Table"),
+        ]),
+        Line::from(vec![
+            Span::styled("    K         ", Style::default().fg(Color::Cyan)),
+            Span::raw("Change tick rate (refresh interval)"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  INTERFACES",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![
+            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
             Span::raw("Navigate interface list"),
         ]),
         Line::from(vec![
-            Span::styled("    Enter           ", Style::default().fg(Color::Green)),
-            Span::raw("Select interface"),
+            Span::styled("    Enter     ", Style::default().fg(Color::Cyan)),
+            Span::raw("Select interface / Select 'All'"),
         ]),
         Line::from(vec![
-            Span::styled("    Esc             ", Style::default().fg(Color::Green)),
-            Span::raw("Clear selection / Exit filter"),
-        ]),
-        Line::from(""),
-        Line::from(vec![Span::styled(
-            "  Interface:",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("    f               ", Style::default().fg(Color::Green)),
+            Span::styled("    f         ", Style::default().fg(Color::Cyan)),
             Span::raw("Filter interfaces by name"),
         ]),
-        Line::from(""),
-        Line::from(vec![Span::styled(
-            "  Display:",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
         Line::from(vec![
-            Span::styled("    r               ", Style::default().fg(Color::Green)),
+            Span::styled("    R/T       ", Style::default().fg(Color::Cyan)),
+            Span::raw("Edit RX/TX speed limits"),
+        ]),
+        Line::from(vec![
+            Span::styled("    b/d       ", Style::default().fg(Color::Cyan)),
+            Span::raw("Toggle byte units (KiB, MiB, GiB) / (KB, MB, GB)"),
+        ]),
+        Line::from(vec![
+            Span::styled("    r         ", Style::default().fg(Color::Cyan)),
             Span::raw("Toggle raw bytes display"),
         ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "  TCP CONNECTIONS",
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
-            Span::styled("    d               ", Style::default().fg(Color::Green)),
-            Span::raw("Decimal byte unit (KB, MB, GB)"),
+            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
+            Span::raw("Scroll through connections"),
         ]),
         Line::from(vec![
-            Span::styled("    b               ", Style::default().fg(Color::Green)),
-            Span::raw("Binary byte unit (KiB, MiB, GiB)"),
-        ]),
-        Line::from(vec![
-            Span::styled("    K               ", Style::default().fg(Color::Green)),
-            Span::raw("Update tick rate"),
+            Span::styled("    f         ", Style::default().fg(Color::Cyan)),
+            Span::raw("Filter connections (all fields)"),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  Other:",
+            "  FILTER MODE",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::from(""),
         Line::from(vec![
-            Span::styled("    ?, h            ", Style::default().fg(Color::Green)),
-            Span::raw("Show/hide this help"),
+            Span::styled("    Type      ", Style::default().fg(Color::Cyan)),
+            Span::raw("Search across all connection fields"),
         ]),
         Line::from(vec![
-            Span::styled("    q               ", Style::default().fg(Color::Green)),
-            Span::raw("Quit"),
+            Span::styled("              ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "(IP, hostname, state, UID, inode)",
+                Style::default().fg(Color::DarkGray),
+            ),
         ]),
-        Line::from(""),
-        Line::from(vec![]),
+        Line::from(vec![
+            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
+            Span::raw("Navigate through filtered results"),
+        ]),
+        Line::from(vec![
+            Span::styled("    Enter     ", Style::default().fg(Color::Cyan)),
+            Span::raw("Lock onto selected connection"),
+        ]),
+        Line::from(vec![
+            Span::styled("              ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "(Press Enter again to unlock)",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("    Esc       ", Style::default().fg(Color::Cyan)),
+            Span::raw("Exit filter mode"),
+        ]),
         Line::from(""),
         Line::from(vec![
             Span::styled("  Press ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                "Esc",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" or ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 "?",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to close", Style::default().fg(Color::DarkGray)),
-        ]),
-    ];
-
-    let help = Paragraph::new(help_text).block(
-        Block::bordered()
-            .border_type(BorderType::Double)
-            .border_style(Style::default().fg(Color::Cyan))
-            .title(vec![Span::raw(" "), Span::raw(" HELP ")])
-            .title_style(
+            Span::styled(" or ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "Esc",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-    );
+            Span::styled(" to close", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+    ];
 
-    frame.render_widget(help, popup_area);
+    let help_paragraph = Paragraph::new(help_text)
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .title(vec![
+                    Span::raw(" "),
+                    Span::styled("⌨", Style::default().fg(Color::Yellow)),
+                    Span::raw("  "),
+                    Span::styled(
+                        "KEYBOARD SHORTCUTS",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                ])
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .alignment(Alignment::Left);
+
+    frame.render_widget(help_paragraph, popup_area);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
