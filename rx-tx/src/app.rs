@@ -28,6 +28,7 @@ use std::vec;
 
 #[derive(Clone, Debug)]
 pub struct App {
+    pub update_avg: bool,
     pub overview_capacity: usize,
     pub main_tab_focus: bool,
     pub interface_speeds: HashMap<String, (f64, f64)>,
@@ -75,6 +76,7 @@ pub enum SpeedInputField {
 impl Default for App {
     fn default() -> Self {
         Self {
+            update_avg: false,
             selected_index: None,
             overview_capacity: 0,
             total_rx_history: Vec::new(),
@@ -215,6 +217,11 @@ impl App {
             .map(|x| Ipv4Addr::from(x.local_ip).to_string())
             .collect();
 
+        let mut rx_peak_speed: HashMap<String, f64> = HashMap::new();
+        let mut tx_peak_speed: HashMap<String, f64> = HashMap::new();
+        let mut rx_avg_speed: HashMap<String, f64> = HashMap::new();
+        let mut tx_avg_speed: HashMap<String, f64> = HashMap::new();
+
         let new_len = interface_name_vec.len();
         self.vertical_scroll_state = self.vertical_scroll_state.content_length(new_len);
         self.horizontal_scroll_state = self.horizontal_scroll_state.content_length(new_len);
@@ -222,8 +229,19 @@ impl App {
         loop {
             let tick_rate = self.tick_rate;
             let latest_stats = self.prev_stats.clone().unwrap();
+
             if let Some(tcp_stats) = self.tcp_stats.clone() {
-                let _ = terminal.draw(|frame| self.render(frame, &latest_stats, &tcp_stats));
+                let _ = terminal.draw(|frame| {
+                    self.render(
+                        frame,
+                        &latest_stats,
+                        &tcp_stats,
+                        &mut rx_peak_speed,
+                        &mut tx_peak_speed,
+                        &mut rx_avg_speed,
+                        &mut tx_avg_speed,
+                    )
+                });
             }
 
             let mut timeout = tick_rate.saturating_sub(last_tick.elapsed());
@@ -532,6 +550,7 @@ impl App {
             }
 
             if last_tick.elapsed() >= self.tick_rate {
+                self.update_avg = true;
                 self.get_stuff(terminal)?;
 
                 let rx: f64 = self
@@ -615,7 +634,20 @@ impl App {
         frame: &mut Frame,
         net_data: &Vec<NetworkStats>,
         tcp_data: &Vec<TcpStats>,
+        rx_peak_speed: &mut HashMap<String, f64>,
+        tx_peak_speed: &mut HashMap<String, f64>,
+        rx_avg_speed: &mut HashMap<String, f64>,
+        tx_avg_speed: &mut HashMap<String, f64>,
     ) {
-        crate::ui::draw_interface_mode(self, frame, net_data, tcp_data);
+        crate::ui::draw_interface_mode(
+            self,
+            frame,
+            net_data,
+            tcp_data,
+            rx_peak_speed,
+            tx_peak_speed,
+            rx_avg_speed,
+            tx_avg_speed,
+        );
     }
 }
