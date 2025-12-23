@@ -19,6 +19,7 @@ use ratatui::widgets::RenderDirection;
 use ratatui::widgets::Row;
 use ratatui::widgets::Sparkline;
 use ratatui::widgets::Table;
+use ratatui::widgets::TableState;
 use ratatui::widgets::Wrap;
 use ratatui::widgets::{
     Axis, BorderType, Borders, Chart, Dataset, HighlightSpacing, List, ListItem, ListState, Tabs,
@@ -81,7 +82,7 @@ fn draw_tick_mode(frame: &mut Frame, app: &App) {
     let tick_text = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Current: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Current: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 current_tick,
                 Style::default()
@@ -91,7 +92,7 @@ fn draw_tick_mode(frame: &mut Frame, app: &App) {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  New Rate: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" New Rate: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 if app.tick_value.is_empty() {
                     "_".to_string()
@@ -108,7 +109,7 @@ fn draw_tick_mode(frame: &mut Frame, app: &App) {
         Line::from(""),
         Line::from(vec![
             Span::styled(
-                "  Enter ",
+                " Enter ",
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
@@ -243,14 +244,14 @@ pub fn draw_speed_edit_popup(frame: &mut Frame, app: &App) {
         Line::from(""),
         Line::from(Span::styled(
             format!(
-                "  Interface: {}",
+                " Interface: {}",
                 app.editing_interface.as_ref().unwrap_or(&"".to_string())
             ),
             Style::default().fg(Color::Cyan),
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("  {}: ", field_name), Style::default().fg(color)),
+            Span::styled(format!(" {}: ", field_name), Style::default().fg(color)),
             Span::styled(
                 &app.speed_input,
                 Style::default()
@@ -261,7 +262,7 @@ pub fn draw_speed_edit_popup(frame: &mut Frame, app: &App) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "  Enter: Save | Esc: Cancel",
+            " Enter: Save | Esc: Cancel",
             Style::default().fg(Color::DarkGray),
         )),
     ];
@@ -345,7 +346,6 @@ struct Theme {
     total_rxtx_packets: Color,
     total_rxtx_packets_data: Color,
 
-    tcp_info_connections: Color,
     tcp_info_total: Color,
     tcp_info_total_data: Color,
 
@@ -464,8 +464,6 @@ impl Default for Theme {
             total_rxtx_packets: Color::DarkGray,
             total_rxtx_packets_data: Color::White,
 
-            tcp_info_connections: Color::Yellow,
-
             tcp_info_total: Color::DarkGray,
             tcp_info_total_data: Color::Green,
 
@@ -553,11 +551,11 @@ impl Default for Theme {
 
             local_addr_data: Color::Green,
             remote_addr_data: Color::Blue,
-            hostname_data: Color::Yellow,
-            state_data: Color::White,
-            tx_rx_data: Color::White,
-            uid_data: Color::White,
-            inode_data: Color::White,
+            hostname_data: Color::Rgb(190, 190, 190),
+            state_data: Color::Rgb(190, 190, 190),
+            tx_rx_data: Color::Rgb(190, 190, 190),
+            uid_data: Color::Rgb(190, 190, 190),
+            inode_data: Color::Rgb(190, 190, 190),
         }
     }
 }
@@ -575,15 +573,15 @@ pub fn draw_interface_mode(
     let theme = Theme::default();
 
     let interface_border = if app.focus == Focus::Interfaces {
-        Color::Red
+        Color::Yellow
     } else {
-        theme.interface_border
+        Color::Red
     };
 
     let tcp_border = if app.focus == Focus::TcpTable {
-        Color::Red
+        Color::Yellow
     } else {
-        theme.interface_border
+        Color::Blue
     };
 
     let byte_unit = app.byte_unit.clone();
@@ -677,12 +675,7 @@ pub fn draw_interface_mode(
                         .title(format!(" Filter: {} ", filter))
                         .title_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                 )
-                .highlight_symbol("> ")
-                .highlight_style(
-                    Style::default()
-                        .fg(theme.filter_highlight_symbol)
-                        .add_modifier(Modifier::BOLD),
-                )
+                .highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD))
                 .highlight_spacing(HighlightSpacing::Always)
                 .fg(Color::Red);
 
@@ -753,17 +746,17 @@ pub fn draw_interface_mode(
                 Span::styled(
                     " [f]",
                     Style::default()
-                        .fg(Color::LightYellow)
+                        .fg(interface_border)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(format!(" Interfaces ({interface_count})")),
+                Span::raw(format!(" Interfaces ({interface_count}) ")),
             ]);
 
             let list = List::new(items).block(
                 Block::bordered()
                     .border_type(BorderType::Plain)
                     .title(title)
-                    .fg(interface_border),
+                    .fg(Color::Red),
             );
 
             frame.render_stateful_widget(list, list_area, &mut state);
@@ -847,7 +840,7 @@ pub fn draw_interface_mode(
                 let rx_para = Paragraph::new(vec![
                     Line::from(""),
                     Line::from(vec![
-                        Span::raw("  "),
+                        Span::raw(" "),
                         Span::styled(
                             make_bar(rx_load, bar_width),
                             Style::default().fg(theme.rx_bar),
@@ -894,8 +887,9 @@ pub fn draw_interface_mode(
                         ])
                         .title_top(
                             Line::from(vec![
+                                Span::styled(" [R]", Style::default().fg(Color::Rgb(30, 144, 255))),
                                 Span::styled(
-                                    " [R] Link Speed: ",
+                                    " Link Speed: ",
                                     Style::default().fg(theme.rx_link_speed),
                                 ),
                                 Span::styled(
@@ -911,6 +905,7 @@ pub fn draw_interface_mode(
                                         .add_modifier(Modifier::BOLD),
                                 ),
                                 Span::raw(" │ "),
+                                Span::styled("[K] ", Style::default().fg(Color::Red)),
                                 Span::styled("Tick: ", Style::default().fg(theme.tick)),
                                 Span::styled(
                                     tick_display.clone(),
@@ -918,7 +913,7 @@ pub fn draw_interface_mode(
                                         .fg(theme.tx_bar)
                                         .add_modifier(Modifier::BOLD),
                                 ),
-                                Span::styled(" (K) ", Style::default().fg(theme.tick)),
+                                Span::raw(" "),
                             ])
                             .right_aligned(),
                         ),
@@ -931,7 +926,7 @@ pub fn draw_interface_mode(
                 let tx_para = Paragraph::new(vec![
                     Line::from(""),
                     Line::from(vec![
-                        Span::raw("  "),
+                        Span::raw(" "),
                         Span::styled(
                             make_bar(tx_load, bar_width),
                             Style::default().fg(theme.tx_bar),
@@ -979,9 +974,11 @@ pub fn draw_interface_mode(
                         .border_style(Style::default().fg(Color::Blue))
                         .title_top(
                             Line::from(vec![
+                                Span::styled(" [T]", Style::default().fg(Color::Rgb(50, 205, 50)))
+                                    .add_modifier(Modifier::BOLD),
                                 Span::styled(
-                                    " [T] Link Speed: ",
-                                    Style::default().fg(theme.tx_link_speed),
+                                    " Link Speed: ",
+                                    Style::default().fg(theme.rx_link_speed),
                                 ),
                                 Span::styled(
                                     format!(
@@ -1016,7 +1013,7 @@ pub fn draw_interface_mode(
 
                 let left_col = Paragraph::new(vec![
                     Line::from(vec![
-                        Span::styled("  Name        : ", Style::default().fg(theme.info_name)),
+                        Span::styled(" Name        : ", Style::default().fg(theme.info_name)),
                         Span::styled(
                             &interface_data.name,
                             Style::default()
@@ -1025,17 +1022,17 @@ pub fn draw_interface_mode(
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Total       : ", Style::default().fg(theme.info_total)),
+                        Span::styled(" Total       : ", Style::default().fg(theme.info_total)),
                         Span::styled(total_str, Style::default().fg(theme.info_total_data)),
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  RX Bytes    : ", Style::default().fg(theme.info_rx_bytes)),
+                        Span::styled(" RX Bytes    : ", Style::default().fg(theme.info_rx_bytes)),
                         Span::styled(rx_bytes_str, Style::default().fg(theme.info_rx_bytes_data)),
                     ]),
                     Line::from(vec![
                         Span::styled(
-                            "  RX Packets  : ",
+                            " RX Packets  : ",
                             Style::default().fg(theme.info_rx_packets),
                         ),
                         Span::styled(
@@ -1045,12 +1042,12 @@ pub fn draw_interface_mode(
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  TX Bytes    : ", Style::default().fg(theme.info_tx_bytes)),
+                        Span::styled(" TX Bytes    : ", Style::default().fg(theme.info_tx_bytes)),
                         Span::styled(tx_bytes_str, Style::default().fg(theme.info_tx_bytes_data)),
                     ]),
                     Line::from(vec![
                         Span::styled(
-                            "  TX Packets  : ",
+                            " TX Packets  : ",
                             Style::default().fg(theme.info_tx_packets),
                         ),
                         Span::styled(
@@ -1069,14 +1066,14 @@ pub fn draw_interface_mode(
 
                 let middle_col = Paragraph::new(vec![
                     Line::from(vec![
-                        Span::styled("  Errors      : ", Style::default().fg(theme.rx_error)),
+                        Span::styled(" Errors      : ", Style::default().fg(theme.rx_error)),
                         Span::styled(
                             format!("{}", interface_data.receive.errs),
                             Style::default().fg(theme.rx_error_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Drops       : ", Style::default().fg(theme.rx_drops)),
+                        Span::styled(" Drops       : ", Style::default().fg(theme.rx_drops)),
                         Span::styled(
                             format!("{}", interface_data.receive.drop),
                             Style::default().fg(theme.rx_drops_data),
@@ -1084,14 +1081,14 @@ pub fn draw_interface_mode(
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  FIFO        : ", Style::default().fg(theme.rx_fifo)),
+                        Span::styled(" FIFO        : ", Style::default().fg(theme.rx_fifo)),
                         Span::styled(
                             format!("{}", interface_data.receive.fifo),
                             Style::default().fg(theme.rx_fifo_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Frame       : ", Style::default().fg(theme.rx_frame)),
+                        Span::styled(" Frame       : ", Style::default().fg(theme.rx_frame)),
                         Span::styled(
                             format!("{}", interface_data.receive.frame),
                             Style::default().fg(theme.rx_frame_data),
@@ -1099,14 +1096,14 @@ pub fn draw_interface_mode(
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  Compressed  : ", Style::default().fg(theme.rx_compressed)),
+                        Span::styled(" Compressed  : ", Style::default().fg(theme.rx_compressed)),
                         Span::styled(
                             format!("{}", interface_data.receive.compressed),
                             Style::default().fg(theme.rx_compressed_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Multicast   : ", Style::default().fg(theme.rx_multicast)),
+                        Span::styled(" Multicast   : ", Style::default().fg(theme.rx_multicast)),
                         Span::styled(
                             format!("{}", interface_data.receive.multicast),
                             Style::default().fg(theme.rx_multicast_data),
@@ -1123,14 +1120,14 @@ pub fn draw_interface_mode(
 
                 let right_col = Paragraph::new(vec![
                     Line::from(vec![
-                        Span::styled("  Errors       : ", Style::default().fg(theme.tx_error)),
+                        Span::styled(" Errors       : ", Style::default().fg(theme.tx_error)),
                         Span::styled(
                             format!("{}", interface_data.transmit.errs),
                             Style::default().fg(theme.tx_error_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled("  Drops        : ", Style::default().fg(theme.tx_drops)),
+                        Span::styled(" Drops        : ", Style::default().fg(theme.tx_drops)),
                         Span::styled(
                             format!("{}", interface_data.transmit.drop),
                             Style::default().fg(theme.tx_drops_data),
@@ -1138,17 +1135,14 @@ pub fn draw_interface_mode(
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  FIFO         : ", Style::default().fg(theme.tx_fifo)),
+                        Span::styled(" FIFO         : ", Style::default().fg(theme.tx_fifo)),
                         Span::styled(
                             format!("{}", interface_data.transmit.fifo),
                             Style::default().fg(theme.tx_fifo_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled(
-                            "  Collisions   : ",
-                            Style::default().fg(theme.tx_collisions),
-                        ),
+                        Span::styled(" Collisions   : ", Style::default().fg(theme.tx_collisions)),
                         Span::styled(
                             format!("{}", interface_data.transmit.colls),
                             Style::default().fg(theme.tx_collisions_data),
@@ -1156,17 +1150,14 @@ pub fn draw_interface_mode(
                     ]),
                     Line::from(""),
                     Line::from(vec![
-                        Span::styled("  Carrier      : ", Style::default().fg(theme.tx_carrier)),
+                        Span::styled(" Carrier      : ", Style::default().fg(theme.tx_carrier)),
                         Span::styled(
                             format!("{}", interface_data.transmit.carrier),
                             Style::default().fg(theme.tx_carrier_data),
                         ),
                     ]),
                     Line::from(vec![
-                        Span::styled(
-                            "  Compressed   : ",
-                            Style::default().fg(theme.tx_compressed),
-                        ),
+                        Span::styled(" Compressed   : ", Style::default().fg(theme.tx_compressed)),
                         Span::styled(
                             format!("{}", interface_data.transmit.compressed),
                             Style::default().fg(theme.tx_compressed_data),
@@ -1209,28 +1200,28 @@ pub fn draw_interface_mode(
             let summary = Paragraph::new(vec![
                 Line::from(vec![
                     Span::styled(
-                        "  System Uptime       : ",
+                        " System Uptime       : ",
                         Style::default().fg(theme.system_uptime),
                     ),
                     Span::styled(uptime, Style::default().fg(theme.system_uptime_data)),
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Total RX            : ",
+                        " Total RX            : ",
                         Style::default().fg(theme.total_rx),
                     ),
                     Span::styled(summary_rx_val, Style::default().fg(theme.total_rx_data)),
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Total TX            : ",
+                        " Total TX            : ",
                         Style::default().fg(theme.total_tx),
                     ),
                     Span::styled(summary_tx_val, Style::default().fg(theme.total_tx_data)),
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Total Packets       : ",
+                        " Total Packets       : ",
                         Style::default().fg(theme.total_packets),
                     ),
                     Span::styled(
@@ -1240,7 +1231,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Total Errors        : ",
+                        " Total Errors        : ",
                         Style::default().fg(theme.total_error),
                     ),
                     Span::styled(
@@ -1256,7 +1247,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Total Drops         : ",
+                        " Total Drops         : ",
                         Style::default().fg(theme.total_drop_ratio),
                     ),
                     Span::styled(
@@ -1266,7 +1257,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Error Rate Ratio    : ",
+                        " Error Rate Ratio    : ",
                         Style::default().fg(theme.total_error_ratio),
                     ),
                     Span::styled(
@@ -1280,7 +1271,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  Drop Rate Ratio     : ",
+                        " Drop Rate Ratio     : ",
                         Style::default().fg(theme.total_drop_ratio),
                     ),
                     Span::styled(
@@ -1294,7 +1285,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  RX/TX Bytes Ratio   : ",
+                        " RX/TX Bytes Ratio   : ",
                         Style::default().fg(theme.total_rxtx_bytes_ratio),
                     ),
                     Span::styled(
@@ -1308,7 +1299,7 @@ pub fn draw_interface_mode(
                 ]),
                 Line::from(vec![
                     Span::styled(
-                        "  RX/TX Packets Ratio : ",
+                        " RX/TX Packets Ratio : ",
                         Style::default().fg(theme.total_rxtx_packets),
                     ),
                     Span::styled(
@@ -1336,6 +1327,7 @@ pub fn draw_interface_mode(
                     .title_top(Line::from(" OVERVIEW ").left_aligned())
                     .title_top(
                         Line::from(vec![
+                            Span::styled(" [K]", Style::default().fg(Color::Red)),
                             Span::styled(" Tick: ", Style::default().fg(theme.tick)),
                             Span::styled(
                                 tick_display,
@@ -1343,11 +1335,11 @@ pub fn draw_interface_mode(
                                     .fg(theme.info_rx_bytes)
                                     .add_modifier(Modifier::BOLD),
                             ),
-                            Span::styled(" (K) ", Style::default().fg(theme.tick)),
+                            Span::raw(" "),
                         ])
                         .right_aligned(),
                     )
-                    .border_style(Style::new().fg(Color::Rgb(115, 194, 251))),
+                    .border_style(Style::new().fg(Color::Yellow)),
             )
             .alignment(Alignment::Left);
             frame.render_widget(summary, left_area);
@@ -1406,21 +1398,18 @@ pub fn draw_interface_mode(
                     let hostname_cache = app.hostname_cache_arc.lock().unwrap();
                 }
             }
-            let mut summary_lines = vec![
-                Line::from("  Connections").style(Style::default().fg(theme.tcp_info_connections)),
-                Line::from(vec![
-                    Span::styled(
-                        "  Total       : ",
-                        Style::default().fg(theme.interface_index),
-                    ),
-                    Span::styled(
-                        format!("{}", tcp_data.len()),
-                        Style::default()
-                            .fg(theme.interface_name)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]),
-            ];
+            let mut summary_lines = vec![Line::from(vec![
+                Span::styled(
+                    " Total       : ",
+                    Style::default().fg(theme.interface_index),
+                ),
+                Span::styled(
+                    format!("{}", tcp_data.len()),
+                    Style::default()
+                        .fg(theme.interface_name)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])];
 
             let unique_ips: HashSet<[u8; 4]> = tcp_data
                 .iter()
@@ -1439,7 +1428,7 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Active      : ",
+                    " Active      : ",
                     Style::default().fg(theme.tcp_info_active),
                 ),
                 Span::styled(
@@ -1450,7 +1439,7 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Unique IPs  : ",
+                    " Unique IPs  : ",
                     Style::default().fg(theme.tcp_info_unique_ip),
                 ),
                 Span::styled(
@@ -1461,7 +1450,7 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Local/Ext   : ",
+                    " Local/Ext   : ",
                     Style::default().fg(theme.tcp_info_localext),
                 ),
                 Span::styled(
@@ -1485,23 +1474,21 @@ pub fn draw_interface_mode(
                 };
                 summary_lines.push(Line::from(vec![
                     Span::styled(
-                        format!("  {:<12}: ", state),
+                        format!(" {:<12}: ", state),
                         Style::default().fg(theme.interface_index),
                     ),
                     Span::styled(format!("{}", count), Style::default().fg(color)),
                 ]));
             }
 
-            let summary = Paragraph::new(summary_lines).block(
-                Block::bordered()
-                    .border_type(BorderType::Plain)
-                    .title(" INFO ")
-                    .title_style(
-                        Style::default()
-                            .fg(theme.tx_bar)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-            );
+            let summary = Paragraph::new(summary_lines)
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Plain)
+                        .title(" INFO ")
+                        .add_modifier(Modifier::BOLD),
+                )
+                .fg(Color::Green);
             frame.render_widget(summary, tcp_split[0]);
 
             let tcp_rows: Vec<Row> = filtered_tcp
@@ -1522,21 +1509,27 @@ pub fn draw_interface_mode(
                         .to_string();
 
                     let state_style = if is_selected {
-                        Style::default().fg(Color::Yellow)
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         match state {
-                            "ESTABLISHED" => Style::default().fg(theme.state_data),
-                            "LISTEN" => Style::default().fg(theme.state_data),
-                            "TIME_WAIT" => Style::default().fg(theme.state_data),
-                            "CLOSE_WAIT" => Style::default().fg(theme.state_data),
-                            "SYN_SENT" | "SYN_RECV" => Style::default().fg(theme.state_data),
-                            "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(theme.tx_drops),
-                            _ => Style::default().fg(theme.interface_index),
+                            "ESTABLISHED" => Style::default().fg(Color::Green),
+                            "LISTEN" => Style::default().fg(Color::Blue),
+                            "TIME_WAIT" => Style::default().fg(Color::DarkGray),
+                            "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 140, 60)),
+                            "SYN_SENT" | "SYN_RECV" => Style::default()
+                                .fg(Color::Rgb(220, 180, 60))
+                                .add_modifier(Modifier::BOLD),
+                            "FIN_WAIT1" | "FIN_WAIT2" => {
+                                Style::default().fg(Color::Rgb(180, 100, 140))
+                            }
+                            _ => Style::default().fg(Color::Gray),
                         }
                     };
 
                     let queue_style = if is_selected {
-                        Style::default().fg(theme.state_data)
+                        Style::default().fg(Color::White)
                     } else if conn.tx_queue > 0 || conn.rx_queue > 0 {
                         Style::default()
                             .fg(theme.tx_drops)
@@ -1545,47 +1538,58 @@ pub fn draw_interface_mode(
                         Style::default().fg(theme.uid_data)
                     };
 
-                    let text_color = if is_selected {
-                        theme.state_data
+                    let (
+                        local_addr_color,
+                        remote_addr_color,
+                        hostname_color,
+                        tx_rx_color,
+                        uid_color,
+                        inode_color,
+                    ) = if is_selected {
+                        (
+                            Color::White,
+                            Color::White,
+                            Color::White,
+                            Color::White,
+                            Color::White,
+                            Color::White,
+                        )
                     } else {
-                        theme.local_addr_data
-                    };
-
-                    let hostname_color = if is_selected {
-                        theme.state_data
-                    } else {
-                        theme.hostname_data
+                        (
+                            theme.local_addr_data,
+                            theme.remote_addr_data,
+                            theme.hostname_data,
+                            theme.tx_rx_data,
+                            theme.uid_data,
+                            theme.inode_data,
+                        )
                     };
 
                     Row::new(vec![
                         Cell::from(Span::styled(
-                            format!(" {}", local_addr),
-                            Style::default().fg(text_color),
+                            format!("{}", local_addr),
+                            Style::default().fg(local_addr_color),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", remote_addr),
-                            Style::default().fg(theme.remote_addr_data),
+                            format!("{}", remote_addr),
+                            Style::default().fg(remote_addr_color),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", hostname),
+                            format!("{}", hostname),
                             Style::default().fg(hostname_color),
                         )),
-                        Cell::from(Span::styled(format!(" {}", state), state_style)),
+                        Cell::from(Span::styled(format!("{}", state), state_style)),
                         Cell::from(Span::styled(
-                            format!(" {}:{}", conn.tx_queue, conn.rx_queue),
+                            format!("{}:{}", conn.tx_queue, conn.rx_queue),
                             queue_style,
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", conn.uid),
-                            Style::default().fg(theme.uid_data),
+                            format!("{}", conn.uid),
+                            Style::default().fg(uid_color),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", conn.inode),
-                            Style::default().fg(if is_selected {
-                                theme.interface_name
-                            } else {
-                                theme.inode_data
-                            }),
+                            format!("{}", conn.inode),
+                            Style::default().fg(inode_color),
                         )),
                     ])
                 })
@@ -1613,13 +1617,13 @@ pub fn draw_interface_mode(
                 .collect();
 
             let title = if filter.is_empty() {
-                format!("TCP FILTER: * (↑ ↓ Enter Esc) ",)
+                format!(" Filter: * (↑ ↓ Enter Esc) ",)
             } else {
-                format!("TCP FILTER: {} (↑ ↓ Enter Esc) ", filter)
+                format!(" Filter: {} (↑ ↓ Enter Esc) ", filter)
             };
 
             let tcp_table = Table::new(
-                visible_tcp_rows,
+                visible_tcp_rows.clone(),
                 [
                     Constraint::Percentage(20),
                     Constraint::Percentage(20),
@@ -1632,28 +1636,24 @@ pub fn draw_interface_mode(
             )
             .header(
                 Row::new(vec![
-                    Cell::from(" Local Address"),
-                    Cell::from(" Remote Address"),
-                    Cell::from(" Hostname"),
-                    Cell::from(" State"),
-                    Cell::from(" TX:RX"),
-                    Cell::from(" UID"),
-                    Cell::from(" Inode"),
+                    Cell::from("Local Address"),
+                    Cell::from("Remote Address"),
+                    Cell::from("Hostname"),
+                    Cell::from("State"),
+                    Cell::from("TX:RX"),
+                    Cell::from("UID"),
+                    Cell::from("Inode"),
                 ])
-                .style(
-                    Style::default()
-                        .fg(theme.tcp_info_connections)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                .style(Style::default().fg(Color::DarkGray)),
             )
             .block(
                 Block::bordered()
                     .border_type(BorderType::Plain)
-                    .border_style(Style::default().fg(theme.rx_error))
+                    .border_style(Style::default().fg(Color::Blue))
                     .title(title)
                     .title_style(
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(Color::Blue)
                             .add_modifier(Modifier::BOLD),
                     )
                     .padding(ratatui::widgets::Padding {
@@ -1662,9 +1662,14 @@ pub fn draw_interface_mode(
                         top: 0,
                         bottom: 0,
                     }),
-            );
+            )
+            .row_highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD));
 
-            frame.render_widget(tcp_table, tcp_split[1]);
+            let mut state = TableState::new();
+            let sel = (*index).min(visible_tcp_rows.len());
+            state.select(Some(sel));
+
+            frame.render_stateful_widget(tcp_table, tcp_split[1], &mut state);
 
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -1714,21 +1719,18 @@ pub fn draw_interface_mode(
                 }
             }
 
-            let mut summary_lines = vec![
-                Line::from("  Connections").style(Style::default().fg(theme.tcp_info_connections)),
-                Line::from(vec![
-                    Span::styled(
-                        "  Total       : ",
-                        Style::default().fg(theme.interface_index),
-                    ),
-                    Span::styled(
-                        format!("{}", tcp_data.len()),
-                        Style::default()
-                            .fg(theme.interface_name)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]),
-            ];
+            let mut summary_lines = vec![Line::from(vec![
+                Span::styled(
+                    " Total       : ",
+                    Style::default().fg(theme.interface_index),
+                ),
+                Span::styled(
+                    format!("{}", tcp_data.len()),
+                    Style::default()
+                        .fg(theme.interface_name)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])];
 
             let unique_ips: HashSet<[u8; 4]> = tcp_data
                 .iter()
@@ -1747,7 +1749,7 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Active      : ",
+                    " Active      : ",
                     Style::default().fg(theme.interface_index),
                 ),
                 Span::styled(
@@ -1758,7 +1760,7 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Unique IPs  : ",
+                    " Unique IPs  : ",
                     Style::default().fg(theme.interface_index),
                 ),
                 Span::styled(
@@ -1769,14 +1771,13 @@ pub fn draw_interface_mode(
 
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    "  Local/Ext   : ",
+                    " Local/Ext   : ",
                     Style::default().fg(theme.tcp_info_localext),
                 ),
                 Span::styled(
-                    format!("{}", local_only),
+                    format!("{}/", local_only),
                     Style::default().fg(theme.tcp_info_localext_data),
                 ),
-                Span::raw("/"),
                 Span::styled(
                     format!("{}", tcp_data.len() - local_only),
                     Style::default().fg(theme.tcp_info_localext_data),
@@ -1794,23 +1795,22 @@ pub fn draw_interface_mode(
                 };
                 summary_lines.push(Line::from(vec![
                     Span::styled(
-                        format!("  {:<12}: ", state),
+                        format!(" {:<12}: ", state),
                         Style::default().fg(theme.interface_index),
                     ),
                     Span::styled(format!("{}", count), Style::default().fg(color)),
                 ]));
             }
 
-            let summary = Paragraph::new(summary_lines).block(
-                Block::bordered()
-                    .border_type(BorderType::Plain)
-                    .title(" INFO ")
-                    .title_style(
-                        Style::default()
-                            .fg(theme.tx_bar)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-            );
+            let summary = Paragraph::new(summary_lines)
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Plain)
+                        .title(" INFO ")
+                        .title_style(Style::default().add_modifier(Modifier::BOLD)),
+                )
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD);
             frame.render_widget(summary, tcp_split[0]);
 
             let tcp_rows: Vec<Row> = tcp_data
@@ -1831,48 +1831,61 @@ pub fn draw_interface_mode(
 
                     let state_style = {
                         match state {
-                            "ESTABLISHED" => Style::default().fg(theme.state_data),
-                            "LISTEN" => Style::default().fg(theme.state_data),
-                            "TIME_WAIT" => Style::default().fg(theme.state_data),
-                            "CLOSE_WAIT" => Style::default().fg(theme.state_data),
-                            "SYN_SENT" | "SYN_RECV" => Style::default().fg(theme.state_data),
-                            "FIN_WAIT1" | "FIN_WAIT2" => Style::default().fg(theme.tx_drops),
-                            _ => Style::default().fg(theme.interface_index),
+                            "ESTABLISHED" => Style::default().fg(Color::Green),
+                            "LISTEN" => Style::default().fg(Color::Yellow),
+                            "TIME_WAIT" => Style::default().fg(Color::DarkGray),
+                            "CLOSE_WAIT" => Style::default().fg(Color::Rgb(200, 140, 60)),
+                            "SYN_SENT" | "SYN_RECV" => Style::default()
+                                .fg(Color::Rgb(220, 180, 60))
+                                .add_modifier(Modifier::BOLD),
+                            "FIN_WAIT1" | "FIN_WAIT2" => {
+                                Style::default().fg(Color::Rgb(180, 100, 140))
+                            }
+                            _ => Style::default().fg(Color::Rgb(190, 190, 190)),
                         }
                     };
-                    let queue_style = if conn.tx_queue > 0 || conn.rx_queue > 0 {
-                        Style::default()
-                            .fg(theme.tx_drops)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(theme.uid_data)
-                    };
+
+                    let (
+                        local_addr_color,
+                        remote_addr_color,
+                        hostname_color,
+                        tx_rx_color,
+                        uid_color,
+                        inode_color,
+                    ) = (
+                        theme.local_addr_data,
+                        theme.remote_addr_data,
+                        theme.hostname_data,
+                        theme.tx_rx_data,
+                        theme.uid_data,
+                        theme.inode_data,
+                    );
 
                     Row::new(vec![
                         Cell::from(Span::styled(
-                            format!(" {}", local_addr),
-                            Style::default().fg(theme.local_addr_data),
+                            format!("{}", local_addr),
+                            Style::default().fg(local_addr_color),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", remote_addr),
-                            Style::default().fg(theme.remote_addr_data),
+                            format!("{}", remote_addr),
+                            Style::default().fg(remote_addr_color),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", hostname),
-                            Style::default().fg(theme.hostname_data),
+                            format!("{}", hostname),
+                            Style::default().fg(hostname_color),
                         )),
-                        Cell::from(Span::styled(format!(" {}", state), state_style)),
+                        Cell::from(Span::styled(format!("{}", state), state_style)),
                         Cell::from(Span::styled(
-                            format!(" {}:{}", conn.tx_queue, conn.rx_queue),
-                            queue_style,
-                        )),
-                        Cell::from(Span::styled(
-                            format!(" {}", conn.uid),
-                            Style::default().fg(theme.uid_data),
+                            format!("{}:{}", conn.tx_queue, conn.rx_queue),
+                            Color::Rgb(190, 190, 190),
                         )),
                         Cell::from(Span::styled(
-                            format!(" {}", conn.inode),
-                            Style::default().fg(theme.inode_data),
+                            format!("{}", conn.uid),
+                            Style::default().fg(uid_color),
+                        )),
+                        Cell::from(Span::styled(
+                            format!("{}", conn.inode),
+                            Style::default().fg(inode_color),
                         )),
                     ])
                 })
@@ -1908,35 +1921,30 @@ pub fn draw_interface_mode(
             )
             .header(
                 Row::new(vec![
-                    Cell::from(" Local Address"),
-                    Cell::from(" Remote Address"),
-                    Cell::from(" Hostname"),
-                    Cell::from(" State"),
-                    Cell::from(" TX:RX"),
-                    Cell::from(" UID"),
-                    Cell::from(" Inode"),
+                    Cell::from("Local Address"),
+                    Cell::from("Remote Address"),
+                    Cell::from("Hostname"),
+                    Cell::from("State"),
+                    Cell::from("TX:RX"),
+                    Cell::from("UID"),
+                    Cell::from("Inode"),
                 ])
                 .style(
                     Style::default()
-                        .fg(theme.filter)
+                        .fg(Color::DarkGray)
                         .add_modifier(Modifier::BOLD),
                 ),
             )
             .block(
                 Block::bordered()
                     .border_type(BorderType::Plain)
-                    .border_style(Style::default().fg(tcp_border))
+                    .border_style(Style::default().fg(Color::Blue))
                     .title(Line::from(vec![
                         Span::styled(
                             " [f] ",
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            format!("TCP CONNECTIONS ({})", tcp_data.len()),
                             Style::default().fg(tcp_border).add_modifier(Modifier::BOLD),
                         ),
+                        Span::from(format!("Tcp Connections ({}) ", tcp_data.len())),
                     ]))
                     .padding(ratatui::widgets::Padding {
                         left: 1,
@@ -1953,8 +1961,7 @@ pub fn draw_interface_mode(
                     .begin_symbol(None)
                     .end_symbol(None)
                     .track_symbol(None)
-                    .thumb_symbol("┃")
-                    .style(Style::default().fg(theme.interface_name)),
+                    .thumb_symbol("┃"),
                 tcp_split[1].inner(Margin {
                     vertical: 1,
                     horizontal: 0,
@@ -1993,113 +2000,113 @@ fn render_help_popup(frame: &mut Frame) {
     let help_text = vec![
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  GLOBAL",
+            " GLOBAL",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![
-            Span::styled("    q         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   q         ", Style::default().fg(Color::Cyan)),
             Span::raw("Quit application"),
         ]),
         Line::from(vec![
-            Span::styled("    ?         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   ?         ", Style::default().fg(Color::Cyan)),
             Span::raw("Toggle this help menu"),
         ]),
         Line::from(vec![
-            Span::styled("    Tab       ", Style::default().fg(Color::Cyan)),
+            Span::styled("   Tab       ", Style::default().fg(Color::Cyan)),
             Span::raw("Switch focus between Interfaces and TCP Table"),
         ]),
         Line::from(vec![
-            Span::styled("    K         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   K         ", Style::default().fg(Color::Cyan)),
             Span::raw("Change tick rate (refresh interval)"),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  INTERFACES",
+            " INTERFACES",
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![
-            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
+            Span::styled("   ↑ /↓      ", Style::default().fg(Color::Cyan)),
             Span::raw("Navigate interface list"),
         ]),
         Line::from(vec![
-            Span::styled("    Enter     ", Style::default().fg(Color::Cyan)),
+            Span::styled("   Enter     ", Style::default().fg(Color::Cyan)),
             Span::raw("Select interface / Select 'All'"),
         ]),
         Line::from(vec![
-            Span::styled("    f         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   f         ", Style::default().fg(Color::Cyan)),
             Span::raw("Filter interfaces by name"),
         ]),
         Line::from(vec![
-            Span::styled("    R/T       ", Style::default().fg(Color::Cyan)),
+            Span::styled("   R/T       ", Style::default().fg(Color::Cyan)),
             Span::raw("Edit RX/TX speed limits"),
         ]),
         Line::from(vec![
-            Span::styled("    b/d       ", Style::default().fg(Color::Cyan)),
+            Span::styled("   b/d       ", Style::default().fg(Color::Cyan)),
             Span::raw("Toggle byte units (KiB, MiB, GiB) / (KB, MB, GB)"),
         ]),
         Line::from(vec![
-            Span::styled("    r         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   r         ", Style::default().fg(Color::Cyan)),
             Span::raw("Toggle raw bytes display"),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  TCP CONNECTIONS",
+            " TCP CONNECTIONS",
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![
-            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
+            Span::styled("   ↑ /↓      ", Style::default().fg(Color::Cyan)),
             Span::raw("Scroll through connections"),
         ]),
         Line::from(vec![
-            Span::styled("    f         ", Style::default().fg(Color::Cyan)),
+            Span::styled("   f         ", Style::default().fg(Color::Cyan)),
             Span::raw("Filter connections (all fields)"),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled(
-            "  FILTER MODE",
+            " FILTER MODE",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![
-            Span::styled("    Type      ", Style::default().fg(Color::Cyan)),
+            Span::styled("   Type      ", Style::default().fg(Color::Cyan)),
             Span::raw("Search across all connection fields"),
         ]),
         Line::from(vec![
-            Span::styled("              ", Style::default().fg(Color::DarkGray)),
+            Span::styled("             ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 "(IP, hostname, state, UID, inode)",
                 Style::default().fg(Color::DarkGray),
             ),
         ]),
         Line::from(vec![
-            Span::styled("    ↑ /↓      ", Style::default().fg(Color::Cyan)),
+            Span::styled("   ↑ /↓      ", Style::default().fg(Color::Cyan)),
             Span::raw("Navigate through filtered results"),
         ]),
         Line::from(vec![
-            Span::styled("    Enter     ", Style::default().fg(Color::Cyan)),
+            Span::styled("   Enter     ", Style::default().fg(Color::Cyan)),
             Span::raw("Lock onto selected connection"),
         ]),
         Line::from(vec![
-            Span::styled("              ", Style::default().fg(Color::DarkGray)),
+            Span::styled("             ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 "(Press Enter again to unlock)",
                 Style::default().fg(Color::DarkGray),
             ),
         ]),
         Line::from(vec![
-            Span::styled("    Esc       ", Style::default().fg(Color::Cyan)),
+            Span::styled("   Esc       ", Style::default().fg(Color::Cyan)),
             Span::raw("Exit filter mode"),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Press ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Press ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 "?",
                 Style::default()
@@ -2125,14 +2132,14 @@ fn render_help_popup(frame: &mut Frame) {
                 .title(vec![
                     Span::raw(" "),
                     Span::styled("⌨", Style::default().fg(Color::Yellow)),
-                    Span::raw("  "),
+                    Span::raw(" "),
                     Span::styled(
                         "KEYBOARD SHORTCUTS",
                         Style::default()
                             .fg(Color::Yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw("  "),
+                    Span::raw(" "),
                 ])
                 .border_style(Style::default().fg(Color::Yellow)),
         )
