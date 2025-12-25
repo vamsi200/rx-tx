@@ -1,6 +1,7 @@
 use crate::app;
 use crate::models::*;
 use crate::parser::*;
+use crate::ui::Theme;
 use crate::ui::*;
 use anyhow::{anyhow, Error, Result};
 use clap::builder::Str;
@@ -26,8 +27,10 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
-#[derive(Clone, Debug)]
 pub struct App {
+    pub change_theme: bool,
+    pub current_theme: Theme,
+    pub theme_index: Option<usize>,
     pub update_avg: bool,
     pub overview_capacity: usize,
     pub main_tab_focus: bool,
@@ -76,6 +79,9 @@ pub enum SpeedInputField {
 impl Default for App {
     fn default() -> Self {
         Self {
+            current_theme: Theme::default(),
+            change_theme: false,
+            theme_index: None,
             update_avg: false,
             selected_index: None,
             overview_capacity: 0,
@@ -133,6 +139,7 @@ pub enum Mode {
     Normal,
     SelectingInterface { filter: String, index: usize },
     FilterLocalAddress { filter: String, index: usize },
+    SelectingTheme { filter: String, index: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -253,6 +260,14 @@ impl App {
                 if let Event::Key(key) = event::read()? {
                     match &mut self.mode {
                         Mode::Normal => match key.code {
+                            KeyCode::Char('t') => {
+                                self.change_theme = true;
+                                self.mode = Mode::SelectingTheme {
+                                    filter: String::new(),
+                                    index: 0,
+                                }
+                            }
+
                             KeyCode::Char('R') => {
                                 if let InterfaceSelected::Interface(ref name) =
                                     self.selected_interface
@@ -345,6 +360,60 @@ impl App {
                             }
                             _ => {}
                         },
+
+                        Mode::SelectingTheme { filter, index } => match key.code {
+                            KeyCode::Char(c) => {
+                                filter.push(c);
+                                *index = 0;
+                            }
+
+                            KeyCode::Backspace => {
+                                filter.pop();
+                                *index = 0;
+                            }
+                            KeyCode::Up => {
+                                if *index > 0 {
+                                    *index -= 1;
+                                    self.theme_index = Some(*index);
+                                    self.current_theme = THEMES[*index].1.clone();
+                                }
+                            }
+
+                            KeyCode::Down | KeyCode::Tab => {
+                                let len = THEMES
+                                    .iter()
+                                    .filter(|(name, _)| name.contains(&*filter))
+                                    .count();
+
+                                if *index + 1 < len {
+                                    *index += 1;
+                                    self.theme_index = Some(*index);
+                                    self.current_theme = THEMES[*index].1.clone();
+                                }
+                            }
+
+                            KeyCode::Enter => {
+                                let filtered: Vec<usize> = THEMES
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, (name, _))| name.contains(&*filter))
+                                    .map(|(i, _)| i)
+                                    .collect();
+
+                                if let Some(&real_idx) = filtered.get(*index) {
+                                    self.current_theme = THEMES[real_idx].1.clone();
+                                    self.mode = Mode::Normal;
+                                }
+                            }
+
+                            KeyCode::Esc => {
+                                self.change_theme = false;
+                                self.theme_index = None;
+                                self.mode = Mode::Normal;
+                            }
+                            _ => {}
+                        },
+
                         Mode::SelectingInterface { filter, index } => match key.code {
                             KeyCode::Char('w') => match key.modifiers {
                                 KeyModifiers::CONTROL => {
