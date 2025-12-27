@@ -12,6 +12,7 @@ mod parser;
 mod ui;
 
 fn main() -> Result<()> {
+    initialize_conf()?;
     let mut terminal = ratatui::init();
     let mut app = App::default();
     app.get_stuff(&mut terminal)?;

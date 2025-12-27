@@ -1,19 +1,20 @@
 use crate::app::App;
 use crate::models::{self, *};
+use crate::ui::{Theme, THEMES};
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
 use core::net;
 use crossterm::event::{self, Event};
 use ratatui::crossterm::event::read;
 use ratatui::style::{Modifier, Style};
-use ratatui::symbols::line;
+use ratatui::symbols::line::{self, NORMAL};
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::Terminal;
 use ratatui::{text::Text, Frame};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::format;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, rename, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
@@ -354,11 +355,82 @@ pub fn parse_uptime() -> Result<String> {
     Ok(out_string)
 }
 
-// Option for user to write to the interface_speed.txt file in `iface;rx_top_speed;tx_top_speed` format and this function will just get the information.
+const CONF_FILE: &'static str = "rxtx.conf";
+
+pub fn initialize_conf() -> Result<(), Error> {
+    if !Path::new(CONF_FILE).exists() {
+        let theme = format!("Theme: Default\nInterface: default, 0, 0");
+
+        fs::write(CONF_FILE, theme)?;
+    }
+
+    Ok(())
+}
+// Fetches the theme from the conf, if found nothing then defaults to Default theme
+pub fn get_theme() -> Theme {
+    let default_theme = Theme::default();
+    let mut file = match OpenOptions::new().read(true).open(CONF_FILE) {
+        std::result::Result::Ok(f) => f,
+        Err(_) => return default_theme,
+    };
+    let mut buf = String::new();
+    if file.read_to_string(&mut buf).is_err() {
+        return default_theme;
+    }
+
+    let mut theme_string = String::new();
+    for line in buf.lines() {
+        let line: Vec<&str> = line.split(":").collect();
+        if line.len() == 2 && line[0] == "Theme" {
+            theme_string = line[1]
+                .trim()
+                .parse::<String>()
+                .unwrap_or(String::from("Default"));
+            break;
+        }
+    }
+
+    let theme = THEMES
+        .iter()
+        .find(|x| x.0.to_lowercase().contains(&theme_string.to_lowercase()));
+
+    match theme {
+        Some(t) => t.1.to_owned(),
+        None => default_theme,
+    }
+}
+
+// Saves the theme
+pub fn save_theme(theme: &'static str) -> Result<(), Error> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(CONF_FILE)?;
+
+    let mut buf = String::new();
+    file.read_to_string(&mut buf)?;
+
+    for line in buf.lines() {
+        let line_vec: Vec<&str> = line.split(":").collect();
+        if line_vec.contains(&"Theme") && line_vec.len() == 2 {
+            let old_theme = line_vec[1];
+            let new_theme = buf.replace(old_theme, &format!(" {}", theme));
+
+            if old_theme != new_theme {
+                fs::write(CONF_FILE, new_theme)?;
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+// Option for user to write to the rxtx.conf file in `Interface: interface, rx_top_speed, tx_top_speed` format and this function will just get the information.
 pub fn get_interface_speed() -> HashMap<String, (f64, f64)> {
     let mut map: HashMap<String, (f64, f64)> = HashMap::new();
 
-    let mut file = match OpenOptions::new().read(true).open("./interface_speed.txt") {
+    let mut file = match OpenOptions::new().read(true).open(CONF_FILE) {
         std::result::Result::Ok(f) => f,
         Err(_) => return map,
     };
@@ -369,30 +441,65 @@ pub fn get_interface_speed() -> HashMap<String, (f64, f64)> {
     }
 
     for line in buf.lines() {
-        let parts: Vec<&str> = line.split(';').collect();
-        if parts.len() == 3 {
-            let interface_name = parts[0].trim();
-            let rx_speed = parts[1].trim().parse::<f64>().unwrap_or(0.0);
-            let tx_speed = parts[2].trim().parse::<f64>().unwrap_or(0.0);
+        if let Some(s) = line.strip_prefix("Interface: ") {
+            let parts: Vec<_> = s.split(',').map(|x| x.trim()).collect();
 
-            if !interface_name.is_empty() && rx_speed > 0.0 && tx_speed > 0.0 {
-                map.insert(interface_name.to_string(), (rx_speed, tx_speed));
+            if parts.len() == 3 {
+                let interface_name = parts[0].trim();
+                let rx_speed = parts[1].trim().parse::<f64>().unwrap_or(0.0);
+                let tx_speed = parts[2].trim().parse::<f64>().unwrap_or(0.0);
+
+                if !interface_name.is_empty() && rx_speed > 0.0 && tx_speed > 0.0 {
+                    map.insert(interface_name.to_string(), (rx_speed, tx_speed));
+                }
+            } else {
+                return map;
             }
         }
     }
     map
 }
 
-// Makes Changes to `interface_speed.txt` file - those information will be taken from the TUI.
+// Makes Changes to `rxtx.conf` file - those information will be taken from the TUI.
 pub fn save_interface_speeds(map: &HashMap<String, (f64, f64)>) -> Result<(), Error> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open("./interface_speed.txt")?;
+    let data = fs::read_to_string(CONF_FILE)?;
+    let mut changed = false;
 
-    for (i_name, (rx, tx)) in map {
-        writeln!(file, "{};{};{}", i_name, rx, tx)?;
+    let mut new_lines = Vec::new();
+    let mut seen = HashSet::new();
+
+    for line in data.lines() {
+        if let Some(s) = line.strip_prefix("Interface: ") {
+            let parts: Vec<_> = s.split(',').map(|x| x.trim()).collect();
+            if parts.len() == 3 {
+                let name = parts[0];
+                let name_lc = name.to_lowercase();
+
+                if let Some((new_name, (rx, tx))) = map
+                    .iter()
+                    .find(|(n, _)| n.to_lowercase() == name_lc || name_lc == "default")
+                {
+                    seen.insert(new_name.to_lowercase());
+                    changed = true;
+                    new_lines.push(format!("Interface: {}, {}, {}", new_name, rx, tx));
+                    continue;
+                }
+            }
+        }
+
+        new_lines.push(line.to_string());
+    }
+
+    for (name, (rx, tx)) in map {
+        let name_lc = name.to_lowercase();
+        if !seen.contains(&name_lc) {
+            changed = true;
+            new_lines.push(format!("Interface: {}, {}, {}", name, rx, tx));
+        }
+    }
+
+    if changed {
+        fs::write(CONF_FILE, new_lines.join("\n"))?;
     }
 
     Ok(())

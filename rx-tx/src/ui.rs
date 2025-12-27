@@ -40,7 +40,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::vec;
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Default, Clone, Debug, Copy)]
 pub struct NetTotals {
     pub total_rx_bytes: u64,
     pub total_tx_bytes: u64,
@@ -324,7 +324,7 @@ pub fn tcp_matches_filter(
     false
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CommonColor {
     heading: Color,
     data: Color,
@@ -332,23 +332,24 @@ struct CommonColor {
     tick: Color,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OverviewAreaColor {
     border: Color,
     key: Color,
     val: Color,
 }
-#[derive(Clone)]
+
+#[derive(Clone, Debug)]
 struct RxGraphAreaColor {
     color: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct TxGraphAreaColor {
     color: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct InterfaceAreaColor {
     border: Color,
     filter_highlight_symbol: Color,
@@ -357,8 +358,7 @@ struct InterfaceAreaColor {
     activity_symbol: Color,
 }
 
-#[derive(Clone)]
-
+#[derive(Clone, Debug)]
 struct RxBarAreaColor {
     border: Color,
     name: Color,
@@ -373,7 +373,8 @@ struct RxBarAreaColor {
     tick_heading: Color,
     tick_val: Color,
 }
-#[derive(Clone)]
+
+#[derive(Clone, Debug)]
 struct TxBarAreaColor {
     border: Color,
     name: Color,
@@ -387,36 +388,35 @@ struct TxBarAreaColor {
 }
 
 // Will need to think whether to have individual colors to each element.
-#[derive(Clone)]
-
+#[derive(Clone, Debug)]
 struct InfoAreaColor {
     heading: Color,
     key: Color,
     val: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct RxAreaColor {
     heading: Color,
     key: Color,
     val: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct TxAreaColor {
     heading: Color,
     key: Color,
     val: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct TcpInfoAreaColor {
     heading: Color,
     key: Color,
     val: Color,
 }
-#[derive(Clone)]
 
+#[derive(Clone, Debug)]
 struct TcpConnAreaColor {
     border: Color,
     filter_highlight_symbol: Color,
@@ -429,7 +429,7 @@ struct TcpConnAreaColor {
     inode_val: Color,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Theme {
     interface_area_color: InterfaceAreaColor,
     overview_area_color: OverviewAreaColor,
@@ -444,10 +444,11 @@ pub struct Theme {
     tcpconn_area_color: TcpConnAreaColor,
 }
 
-pub static THEMES: [(&'static str, std::sync::LazyLock<Theme>); 3] = [
-    ("gruvbox", std::sync::LazyLock::new(|| gruvbox())),
-    ("light", std::sync::LazyLock::new(|| light())),
-    ("dark", std::sync::LazyLock::new(|| dark())),
+pub static THEMES: [(&'static str, std::sync::LazyLock<Theme>); 4] = [
+    ("Default", std::sync::LazyLock::new(|| Theme::default())),
+    ("Gruvbox", std::sync::LazyLock::new(|| gruvbox())),
+    ("Light", std::sync::LazyLock::new(|| light())),
+    ("Dark", std::sync::LazyLock::new(|| dark())),
 ];
 
 impl Default for Theme {

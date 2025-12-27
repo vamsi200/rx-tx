@@ -1,5 +1,6 @@
 use crate::app;
 use crate::models::*;
+use crate::parser;
 use crate::parser::*;
 use crate::ui::Theme;
 use crate::ui::*;
@@ -79,7 +80,7 @@ pub enum SpeedInputField {
 impl Default for App {
     fn default() -> Self {
         Self {
-            current_theme: Theme::default(),
+            current_theme: get_theme(),
             change_theme: false,
             theme_index: None,
             update_avg: false,
@@ -382,7 +383,9 @@ impl App {
                             KeyCode::Down | KeyCode::Tab => {
                                 let len = THEMES
                                     .iter()
-                                    .filter(|(name, _)| name.contains(&*filter))
+                                    .filter(|(name, _)| {
+                                        name.to_lowercase().contains(&*filter.to_lowercase())
+                                    })
                                     .count();
 
                                 if *index + 1 < len {
@@ -396,12 +399,16 @@ impl App {
                                 let filtered: Vec<usize> = THEMES
                                     .iter()
                                     .enumerate()
-                                    .filter(|(_, (name, _))| name.contains(&*filter))
+                                    .filter(|(_, (name, _))| {
+                                        name.to_lowercase().contains(&*filter.to_lowercase())
+                                    })
                                     .map(|(i, _)| i)
                                     .collect();
 
                                 if let Some(&real_idx) = filtered.get(*index) {
                                     self.current_theme = THEMES[real_idx].1.clone();
+                                    let theme_str = THEMES[real_idx].0;
+                                    save_theme(theme_str)?;
                                     self.mode = Mode::Normal;
                                 }
                             }
@@ -415,14 +422,13 @@ impl App {
                         },
 
                         Mode::SelectingInterface { filter, index } => match key.code {
-                            KeyCode::Char('w') => match key.modifiers {
-                                KeyModifiers::CONTROL => {
-                                    filter.clear();
-                                    *index = 0;
-                                }
-                                _ => {}
-                            },
-
+                            // KeyCode::Char('w') => match key.modifiers {
+                            //     KeyModifiers::CONTROL => {
+                            //         filter.clear();
+                            //         *index = 0;
+                            //     }
+                            //     _ => {}
+                            // },
                             KeyCode::Char(c) => {
                                 filter.push(c);
                                 *index = 0;
