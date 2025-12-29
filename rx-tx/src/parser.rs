@@ -395,7 +395,7 @@ pub fn get_theme() -> Theme {
         .find(|x| x.0.to_lowercase().contains(&theme_string.to_lowercase()));
 
     match theme {
-        Some(t) => t.1.to_owned(),
+        Some(t) => t.1(),
         None => default_theme,
     }
 }

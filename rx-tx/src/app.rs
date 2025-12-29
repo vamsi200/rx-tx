@@ -20,6 +20,7 @@ use ratatui::{text::Text, Frame};
 use ratatui::{DefaultTerminal, Terminal};
 use std::char;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::result::Result::Ok;
@@ -215,11 +216,12 @@ impl App {
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         let mut last_tick = Instant::now();
-        let interface_name_vec: Vec<String> = parse_proc_net_dev()?
+        let mut interface_name_vec: VecDeque<String> = parse_proc_net_dev()?
             .iter()
             .map(|s| s.name.clone())
             .collect();
 
+        interface_name_vec.push_front(String::from("all"));
         let local_address_vec: Vec<_> = parse_proc_net_tcp()?
             .iter()
             .map(|x| Ipv4Addr::from(x.local_ip).to_string())
@@ -376,7 +378,7 @@ impl App {
                                 if *index > 0 {
                                     *index -= 1;
                                     self.theme_index = Some(*index);
-                                    self.current_theme = THEMES[*index].1.clone();
+                                    self.current_theme = THEMES[*index].1();
                                 }
                             }
 
@@ -391,7 +393,7 @@ impl App {
                                 if *index + 1 < len {
                                     *index += 1;
                                     self.theme_index = Some(*index);
-                                    self.current_theme = THEMES[*index].1.clone();
+                                    self.current_theme = THEMES[*index].1();
                                 }
                             }
 
@@ -406,7 +408,7 @@ impl App {
                                     .collect();
 
                                 if let Some(&real_idx) = filtered.get(*index) {
-                                    self.current_theme = THEMES[real_idx].1.clone();
+                                    self.current_theme = THEMES[real_idx].1();
                                     let theme_str = THEMES[real_idx].0;
                                     save_theme(theme_str)?;
                                     self.mode = Mode::Normal;
@@ -417,6 +419,7 @@ impl App {
                                 self.change_theme = false;
                                 self.theme_index = None;
                                 self.mode = Mode::Normal;
+                                self.current_theme = get_theme();
                             }
                             _ => {}
                         },
@@ -457,15 +460,20 @@ impl App {
                                     .collect();
 
                                 if let Some(&selected_interface) = name_match.get(*index) {
-                                    self.selected_interface =
-                                        InterfaceSelected::Interface(selected_interface.clone());
-                                    self.mode = Mode::Normal;
+                                    if *selected_interface == "all".to_string() {
+                                        self.selected_interface = InterfaceSelected::All;
+                                        self.mode = Mode::Normal;
+                                    } else {
+                                        self.selected_interface = InterfaceSelected::Interface(
+                                            selected_interface.clone(),
+                                        );
+                                        self.mode = Mode::Normal;
+                                    }
                                     self.get_stuff(terminal)?;
                                 }
                             }
                             KeyCode::Esc => {
                                 self.mode = Mode::Normal;
-                                self.selected_interface = InterfaceSelected::All;
                             }
                             _ => {}
                         },
