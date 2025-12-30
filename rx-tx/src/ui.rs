@@ -129,7 +129,7 @@ fn draw_tick_mode(frame: &mut Frame, app: &App) {
             Block::bordered()
                 .border_type(BorderType::Plain)
                 .border_style(Style::default().fg(Color::Yellow))
-                .title(" ⏱ SET TICK RATE ")
+                .title(" SET TICK RATE ")
                 .title_style(
                     Style::default()
                         .fg(Color::Yellow)
@@ -2499,9 +2499,6 @@ fn render_help_popup(frame: &mut Frame) {
             Block::bordered()
                 .border_type(BorderType::Plain)
                 .title(vec![
-                    Span::raw(" "),
-                    Span::styled("⌨", Style::default().fg(Color::Yellow)),
-                    Span::raw(" "),
                     Span::styled(
                         " KEYBOARD SHORTCUTS",
                         Style::default()
