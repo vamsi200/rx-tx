@@ -589,114 +589,117 @@ impl Default for Theme {
 fn nord() -> Theme {
     let common = CommonColor {
         heading: Color::Rgb(76, 86, 106),
-        data: Color::Rgb(236, 239, 244),
-        muted: Color::Rgb(216, 222, 233),
+        data: Color::Rgb(216, 222, 233),
+        muted: Color::Rgb(129, 161, 193),
         tick: Color::Rgb(59, 66, 82),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
-            border: Color::Rgb(191, 97, 106),
-            filter_highlight_symbol: Color::Rgb(235, 203, 139),
-            name: Color::Rgb(191, 97, 106),
-            filter_heading: Color::Rgb(191, 97, 106),
-            filter_background: Color::Rgb(191, 97, 106),
+            border: Color::Rgb(129, 161, 193),
+            filter_highlight_symbol: Color::Rgb(150, 210, 230),
+
+            name: Color::Rgb(129, 161, 193),
+            filter_heading: Color::Rgb(94, 129, 172),
+            filter_background: Color::Rgb(129, 161, 193),
         },
 
         overview_area_color: OverviewAreaColor {
-            tick_highlight: Color::Red,
-            tick_heading: Color::DarkGray,
-            tick_value: Color::Yellow,
-            border: Color::Rgb(235, 203, 139),
+            tick_highlight: Color::Rgb(136, 192, 208),
+            tick_heading: common.heading,
+            tick_value: Color::Rgb(129, 161, 193),
+            border: Color::Rgb(129, 161, 193),
             key: common.heading,
             val: common.data,
         },
 
         rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(163, 190, 140),
+            color: Color::Rgb(143, 188, 187),
         },
 
         txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(136, 192, 208),
+            color: Color::Rgb(94, 129, 172),
         },
 
         rxbar_area_color: RxBarAreaColor {
-            border: Color::Rgb(163, 190, 140),
-            name: Color::Rgb(163, 190, 140),
+            border: Color::Rgb(143, 188, 187),
+            name: Color::Rgb(143, 188, 187),
             common_heading: common.heading,
-            current_val: Color::Rgb(136, 192, 208),
-            peak_val: Color::Rgb(163, 190, 140),
-            average_val: Color::Rgb(143, 188, 187),
-            link_speed_highlight: Color::Rgb(136, 192, 208),
+            current_val: Color::Rgb(94, 129, 172),
+            peak_val: Color::Rgb(143, 188, 187),
+            average_val: Color::Rgb(94, 129, 172),
+            link_speed_highlight: Color::Rgb(129, 161, 193),
             link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(163, 190, 140),
-            tick_highlight: Color::Rgb(191, 97, 106),
+            link_speed_val: Color::Rgb(143, 188, 187),
+            tick_highlight: Color::Rgb(136, 192, 208),
             tick_heading: common.heading,
-            tick_val: Color::Rgb(136, 192, 208),
+            tick_val: Color::Rgb(94, 129, 172),
         },
 
         txbar_area_color: TxBarAreaColor {
-            border: Color::Rgb(136, 192, 208),
-            name: Color::Rgb(136, 192, 208),
+            border: Color::Rgb(94, 129, 172),
+            name: Color::Rgb(94, 129, 172),
             common_heading: common.heading,
-            current_val: Color::Rgb(163, 190, 140),
-            peak_val: Color::Rgb(136, 192, 208),
+            current_val: Color::Rgb(143, 188, 187),
+            peak_val: Color::Rgb(94, 129, 172),
             average_val: Color::Rgb(143, 188, 187),
-            link_speed_highlight: Color::Rgb(163, 190, 140),
+            link_speed_highlight: Color::Rgb(129, 161, 193),
             link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(136, 192, 208),
+            link_speed_val: Color::Rgb(94, 129, 172),
         },
 
         info_area_color: InfoAreaColor {
-            heading: Color::Rgb(235, 203, 139),
-            key: common.heading,
-            val: common.data,
-        },
-
-        rx_area_color: RxAreaColor {
-            heading: Color::Rgb(163, 190, 140),
-            key: common.heading,
-            val: common.data,
-        },
-
-        tx_area_color: TxAreaColor {
             heading: Color::Rgb(136, 192, 208),
             key: common.heading,
             val: common.data,
         },
 
+        rx_area_color: RxAreaColor {
+            heading: Color::Rgb(143, 188, 187),
+            key: common.heading,
+            val: common.data,
+        },
+
+        tx_area_color: TxAreaColor {
+            heading: Color::Rgb(94, 129, 172),
+            key: common.heading,
+            val: common.data,
+        },
+
         tcpinfo_area_color: TcpInfoAreaColor {
-            heading: Color::Rgb(163, 190, 140),
+            heading: Color::Rgb(143, 188, 187),
             key: common.heading,
             val: common.data,
         },
 
         tcpconn_area_color: TcpConnAreaColor {
-            border: Color::Rgb(136, 192, 208),
-            filter_highlight_symbol: Color::Red,
-            filter: Color::Yellow,
+            border: Color::Rgb(129, 161, 193),
+            filter_highlight_symbol: Color::Rgb(129, 161, 193),
+            filter: Color::Rgb(136, 192, 208),
             heading: common.heading,
-            local_addr_val: Color::Rgb(163, 190, 140),
-            remote_addr_val: Color::Rgb(136, 192, 208),
+            local_addr_val: Color::Rgb(143, 188, 187),
+            remote_addr_val: Color::Rgb(94, 129, 172),
             hostname_val: common.muted,
             txrx_val: common.muted,
             uid_val: common.muted,
             inode_val: common.muted,
-            state_established: Color::Green,
-            state_listen: Color::Yellow,
-            state_time_wait: Color::Rgb(190, 190, 190),
-            state_close_wait: Color::Rgb(200, 140, 60),
-            state_syn_sent: Color::Rgb(220, 180, 60),
-            state_fin_wait: Color::Rgb(180, 100, 140),
+            state_established: Color::Rgb(143, 188, 187),
+            state_listen: Color::Rgb(136, 192, 208),
+            state_time_wait: Color::Rgb(76, 86, 106),
+            state_close_wait: Color::Rgb(129, 161, 193),
+            state_syn_sent: Color::Rgb(136, 192, 208),
+            state_fin_wait: Color::Rgb(94, 129, 172),
         },
+
         sparkline_area_color: SparkLineColor {
-            rx_border_color: Color::Green,
-            tx_border_color: Color::Blue,
-            rx_sparkline: Color::Green,
-            tx_sparkline: Color::Blue,
+            rx_border_color: Color::Rgb(143, 188, 187),
+            tx_border_color: Color::Rgb(94, 129, 172),
+            rx_sparkline: Color::Rgb(143, 188, 187),
+            tx_sparkline: Color::Rgb(94, 129, 172),
         },
     }
 }
+
 fn gruvbox() -> Theme {
     let common = CommonColor {
         heading: Color::Rgb(124, 111, 100),
@@ -710,7 +713,7 @@ fn gruvbox() -> Theme {
             border: Color::Rgb(204, 36, 29),
             filter_highlight_symbol: Color::Rgb(250, 189, 47),
             name: Color::Rgb(251, 73, 52),
-            filter_heading: Color::Rgb(251, 73, 47),
+            filter_heading: Color::Rgb(251, 73, 52),
             filter_background: Color::Rgb(204, 36, 29),
         },
 
@@ -732,15 +735,15 @@ fn gruvbox() -> Theme {
         },
 
         rxbar_area_color: RxBarAreaColor {
-            border: Color::Rgb(142, 192, 124),
-            name: Color::Rgb(104, 157, 106),
+            border: Color::Rgb(184, 187, 38),
+            name: Color::Rgb(184, 187, 38),
             common_heading: common.heading,
             current_val: Color::Rgb(131, 165, 152),
             peak_val: Color::Rgb(184, 187, 38),
-            average_val: Color::Rgb(69, 133, 136),
-            link_speed_highlight: Color::Rgb(142, 192, 124),
+            average_val: Color::Rgb(131, 165, 152),
+            link_speed_highlight: Color::Rgb(152, 151, 26),
             link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(104, 157, 106),
+            link_speed_val: Color::Rgb(184, 187, 38),
             tick_highlight: Color::Rgb(251, 73, 52),
             tick_heading: common.heading,
             tick_val: Color::Rgb(131, 165, 152),
@@ -748,12 +751,12 @@ fn gruvbox() -> Theme {
 
         txbar_area_color: TxBarAreaColor {
             border: Color::Rgb(131, 165, 152),
-            name: Color::Rgb(69, 133, 136),
+            name: Color::Rgb(131, 165, 152),
             common_heading: common.heading,
             current_val: Color::Rgb(184, 187, 38),
-            peak_val: Color::Rgb(69, 133, 136),
-            average_val: Color::Rgb(152, 151, 26),
-            link_speed_highlight: Color::Rgb(184, 187, 38),
+            peak_val: Color::Rgb(131, 165, 152),
+            average_val: Color::Rgb(184, 187, 38),
+            link_speed_highlight: Color::Rgb(152, 151, 26),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(131, 165, 152),
         },
@@ -841,7 +844,7 @@ fn solarized_dark() -> Theme {
         },
 
         txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(220, 50, 47),
+            color: Color::Rgb(133, 153, 0),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -853,23 +856,23 @@ fn solarized_dark() -> Theme {
             average_val: Color::Rgb(133, 153, 0),
             link_speed_highlight: Color::Rgb(42, 161, 152),
             link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(42, 161, 152),
+            link_speed_val: Color::Rgb(133, 153, 0),
             tick_highlight: Color::Rgb(220, 50, 47),
             tick_heading: common.heading,
-            tick_val: Color::Rgb(133, 153, 0),
+            tick_val: Color::Rgb(42, 161, 152),
+        },
+        txbar_area_color: TxBarAreaColor {
+            border: Color::Rgb(133, 153, 0),
+            name: Color::Rgb(133, 153, 0),
+            common_heading: common.heading,
+            current_val: Color::Rgb(42, 161, 152),
+            peak_val: Color::Rgb(133, 153, 0),
+            average_val: Color::Rgb(42, 161, 152),
+            link_speed_highlight: Color::Rgb(133, 153, 0),
+            link_speed_heading: common.heading,
+            link_speed_val: Color::Rgb(42, 161, 152),
         },
 
-        txbar_area_color: TxBarAreaColor {
-            border: Color::Rgb(220, 50, 47),
-            name: Color::Rgb(220, 50, 47),
-            common_heading: common.heading,
-            current_val: Color::Rgb(211, 54, 130),
-            peak_val: Color::Rgb(220, 50, 47),
-            average_val: Color::Rgb(211, 54, 130),
-            link_speed_highlight: Color::Rgb(220, 50, 47),
-            link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(220, 50, 47),
-        },
         info_area_color: InfoAreaColor {
             heading: Color::Rgb(181, 137, 0),
             key: common.heading,
@@ -883,7 +886,7 @@ fn solarized_dark() -> Theme {
         },
 
         tx_area_color: TxAreaColor {
-            heading: Color::Rgb(220, 50, 47), // red
+            heading: Color::Rgb(133, 153, 0),
             key: common.heading,
             val: common.data,
         },
@@ -914,10 +917,10 @@ fn solarized_dark() -> Theme {
         },
 
         sparkline_area_color: SparkLineColor {
-            rx_border_color: Color::Rgb(42, 161, 152), // cyan
-            tx_border_color: Color::Rgb(220, 50, 47),  // red
-            rx_sparkline: Color::Rgb(42, 161, 152),    // cyan
-            tx_sparkline: Color::Rgb(220, 50, 47),     // red
+            rx_border_color: Color::Rgb(42, 161, 152),
+            tx_border_color: Color::Rgb(133, 153, 0),
+            rx_sparkline: Color::Rgb(42, 161, 152),
+            tx_sparkline: Color::Rgb(133, 153, 0),
         },
     }
 }
@@ -932,18 +935,17 @@ fn catppuccin_mocha() -> Theme {
 
     Theme {
         interface_area_color: InterfaceAreaColor {
-            border: Color::Rgb(243, 139, 168),
-            filter_highlight_symbol: Color::Rgb(249, 226, 175),
-            name: Color::Rgb(235, 160, 172),
-            filter_heading: Color::Rgb(220, 50, 47),
-            filter_background: Color::Rgb(191, 97, 106),
+            border: Color::Rgb(203, 166, 247),
+            filter_highlight_symbol: Color::Rgb(250, 179, 135),
+            name: Color::Rgb(203, 166, 247),
+            filter_heading: Color::Rgb(243, 139, 168),
+            filter_background: Color::Rgb(203, 166, 247),
         },
 
         overview_area_color: OverviewAreaColor {
-            tick_highlight: Color::Red,
-            tick_heading: Color::DarkGray,
-            tick_value: Color::Yellow,
-
+            tick_highlight: Color::Rgb(243, 139, 168),
+            tick_heading: common.heading,
+            tick_value: Color::Rgb(249, 226, 175),
             border: Color::Rgb(249, 226, 175),
             key: common.heading,
             val: common.data,
@@ -954,34 +956,34 @@ fn catppuccin_mocha() -> Theme {
         },
 
         txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(137, 180, 250),
+            color: Color::Rgb(203, 166, 247),
         },
 
         rxbar_area_color: RxBarAreaColor {
             border: Color::Rgb(166, 227, 161),
             name: Color::Rgb(166, 227, 161),
             common_heading: common.heading,
-            current_val: Color::Rgb(137, 180, 250),
+            current_val: Color::Rgb(203, 166, 247),
             peak_val: Color::Rgb(166, 227, 161),
-            average_val: Color::Rgb(148, 226, 213),
-            link_speed_highlight: Color::Rgb(116, 199, 236),
+            average_val: Color::Rgb(203, 166, 247),
+            link_speed_highlight: Color::Rgb(148, 226, 213),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(166, 227, 161),
             tick_highlight: Color::Rgb(250, 179, 135),
             tick_heading: common.heading,
-            tick_val: Color::Rgb(137, 180, 250),
+            tick_val: Color::Rgb(203, 166, 247),
         },
 
         txbar_area_color: TxBarAreaColor {
-            border: Color::Rgb(137, 180, 250),
-            name: Color::Rgb(137, 180, 250),
+            border: Color::Rgb(203, 166, 247),
+            name: Color::Rgb(203, 166, 247),
             common_heading: common.heading,
             current_val: Color::Rgb(166, 227, 161),
-            peak_val: Color::Rgb(137, 180, 250),
-            average_val: Color::Rgb(148, 226, 213),
-            link_speed_highlight: Color::Rgb(166, 227, 161),
+            peak_val: Color::Rgb(203, 166, 247),
+            average_val: Color::Rgb(166, 227, 161),
+            link_speed_highlight: Color::Rgb(148, 226, 213),
             link_speed_heading: common.heading,
-            link_speed_val: Color::Rgb(137, 180, 250),
+            link_speed_val: Color::Rgb(203, 166, 247),
         },
 
         info_area_color: InfoAreaColor {
@@ -997,7 +999,7 @@ fn catppuccin_mocha() -> Theme {
         },
 
         tx_area_color: TxAreaColor {
-            heading: Color::Rgb(137, 180, 250),
+            heading: Color::Rgb(203, 166, 247),
             key: common.heading,
             val: common.data,
         },
@@ -1010,9 +1012,8 @@ fn catppuccin_mocha() -> Theme {
 
         tcpconn_area_color: TcpConnAreaColor {
             border: Color::Rgb(137, 180, 250),
-            filter_highlight_symbol: Color::Red,
-            filter: Color::Yellow,
-
+            filter_highlight_symbol: Color::Rgb(203, 166, 247),
+            filter: Color::Rgb(250, 179, 135),
             heading: common.heading,
             local_addr_val: Color::Rgb(166, 227, 161),
             remote_addr_val: Color::Rgb(137, 180, 250),
@@ -1020,21 +1021,23 @@ fn catppuccin_mocha() -> Theme {
             txrx_val: common.muted,
             uid_val: common.muted,
             inode_val: common.muted,
-            state_established: Color::Green,
-            state_listen: Color::Yellow,
-            state_time_wait: Color::Rgb(190, 190, 190),
-            state_close_wait: Color::Rgb(200, 140, 60),
-            state_syn_sent: Color::Rgb(220, 180, 60),
-            state_fin_wait: Color::Rgb(180, 100, 140),
+            state_established: Color::Rgb(166, 227, 161),
+            state_listen: Color::Rgb(249, 226, 175),
+            state_time_wait: Color::Rgb(147, 153, 178),
+            state_close_wait: Color::Rgb(250, 179, 135),
+            state_syn_sent: Color::Rgb(249, 226, 175),
+            state_fin_wait: Color::Rgb(245, 194, 231),
         },
+
         sparkline_area_color: SparkLineColor {
-            rx_border_color: Color::Green,
-            tx_border_color: Color::Blue,
-            rx_sparkline: Color::Green,
-            tx_sparkline: Color::Blue,
+            rx_border_color: Color::Rgb(166, 227, 161),
+            tx_border_color: Color::Rgb(203, 166, 247),
+            rx_sparkline: Color::Rgb(166, 227, 161),
+            tx_sparkline: Color::Rgb(203, 166, 247),
         },
     }
 }
+
 fn ayu() -> Theme {
     let common = CommonColor {
         heading: Color::Rgb(92, 99, 112),
