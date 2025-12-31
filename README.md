@@ -6,6 +6,8 @@ A **Terminal User Interface (TUI)** based bandwidth (`/proc/net/dev`) and networ
 This project is a terminal-based bandwidth and network monitoring tool designed to provide real-time visibility into system and interface-level network activity. 
 It presents a unified view of network interfaces, live bandwidth usage, detailed kernel statistics, and active TCP connections, all in a single interactive TUI.
 
+>Note: Don't forget to change the LinkSpeed using `R` for RX Link Speed(Download) and `T` for TX Link Speed(Upload).
+
 # Demo GIF
 ![TUI demo](./demo/demo.gif)
 
