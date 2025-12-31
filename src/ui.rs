@@ -1966,6 +1966,7 @@ pub fn draw_interface_mode(
                 Line::from(""),
                 Line::from(""),
                 Line::from(""),
+                Line::from(""),
                 Line::from(vec![Span::styled(
                     " Press `h` or `?` for help",
                     Style::default().fg(app.current_theme.overview_area_color.val),
@@ -2618,7 +2619,7 @@ fn theme_selection_popup(frame: &mut Frame, app: &mut App) {
                 .block(
                     Block::bordered()
                         .title("Filter")
-                        .border_style(Style::default().fg(Color::Yellow)),
+                        .border_style(Style::default().fg(Color::Magenta)),
                 )
                 .style(Style::default().fg(Color::White));
 

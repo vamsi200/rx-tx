@@ -80,7 +80,7 @@ pub fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
     Ok(output)
 }
 
-pub fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line> {
+pub fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line<'_>> {
     let lines: Vec<Line> = stats
         .iter()
         .flat_map(|interface| {

@@ -425,17 +425,16 @@ impl App {
                         },
 
                         Mode::SelectingInterface { filter, index } => match key.code {
-                            // KeyCode::Char('w') => match key.modifiers {
-                            //     KeyModifiers::CONTROL => {
-                            //         filter.clear();
-                            //         *index = 0;
-                            //     }
-                            //     _ => {}
-                            // },
+                            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                filter.clear();
+                                *index = 0;
+                            }
+
                             KeyCode::Char(c) => {
                                 filter.push(c);
                                 *index = 0;
                             }
+
                             KeyCode::Backspace => {
                                 filter.pop();
                             }
@@ -478,13 +477,10 @@ impl App {
                             _ => {}
                         },
                         Mode::FilterLocalAddress { filter, index } => match key.code {
-                            KeyCode::Char('w') => match key.modifiers {
-                                KeyModifiers::CONTROL => {
-                                    filter.clear();
-                                    *index = 0;
-                                }
-                                _ => {}
-                            },
+                            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                filter.clear();
+                                *index = 0;
+                            }
 
                             KeyCode::Char(c) => {
                                 filter.push(c);
