@@ -9,6 +9,7 @@ use parser::*;
 mod app;
 mod models;
 mod parser;
+mod theme;
 mod ui;
 
 fn main() -> Result<()> {

@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::models::{self, *};
-use crate::ui::{Theme, THEMES};
+use crate::theme::{Theme, THEMES};
 use anyhow::{anyhow, Error, Ok, Result};
 use clap::builder::Str;
 use core::net;

@@ -2,7 +2,8 @@ use crate::app;
 use crate::models::*;
 use crate::parser;
 use crate::parser::*;
-use crate::ui::Theme;
+use crate::theme::Theme;
+use crate::theme::THEMES;
 use crate::ui::*;
 use anyhow::{anyhow, Error, Result};
 use clap::builder::Str;
@@ -655,14 +656,14 @@ impl App {
         self.interface_speeds
             .get(interface)
             .map(|(rx, _)| *rx / 8.0)
-            .unwrap_or(125.0) // Default is 125Mbps btw
+            .unwrap_or(100.0)
     }
 
     pub fn get_tx_limit(&self, interface: &str) -> f64 {
         self.interface_speeds
             .get(interface)
             .map(|(_, tx)| *tx / 8.0)
-            .unwrap_or(125.0) // Default is 125Mbps btw
+            .unwrap_or(100.0)
     }
 
     pub fn scroll_up(&mut self) {
