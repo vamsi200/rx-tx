@@ -1,43 +1,27 @@
 use ratatui::style::Color;
 
-#[derive(Clone, Debug)]
 pub struct CommonColor {
     pub heading: Color,
     pub data: Color,
     pub muted: Color,
-    pub tick: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct OverviewAreaColor {
     pub border: Color,
     pub tick_heading: Color,
     pub tick_highlight: Color,
-    pub tick_value: Color,
     pub key: Color,
     pub val: Color,
 }
 
-#[derive(Clone, Debug)]
-pub struct RxGraphAreaColor {
-    pub color: Color,
-}
-
-#[derive(Clone, Debug)]
-pub struct TxGraphAreaColor {
-    pub color: Color,
-}
-
-#[derive(Clone, Debug)]
 pub struct InterfaceAreaColor {
     pub border: Color,
     pub filter_highlight_symbol: Color,
-    pub name: Color,
     pub filter_heading: Color,
     pub filter_background: Color,
+    pub data: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct RxBarAreaColor {
     pub border: Color,
     pub name: Color,
@@ -48,12 +32,8 @@ pub struct RxBarAreaColor {
     pub link_speed_highlight: Color,
     pub link_speed_heading: Color,
     pub link_speed_val: Color,
-    pub tick_highlight: Color,
-    pub tick_heading: Color,
-    pub tick_val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct TxBarAreaColor {
     pub border: Color,
     pub name: Color,
@@ -66,21 +46,18 @@ pub struct TxBarAreaColor {
     pub link_speed_val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct InfoAreaColor {
     pub heading: Color,
     pub key: Color,
     pub val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct RxAreaColor {
     pub heading: Color,
     pub key: Color,
     pub val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct SparkLineColor {
     pub rx_border_color: Color,
     pub tx_border_color: Color,
@@ -88,26 +65,22 @@ pub struct SparkLineColor {
     pub tx_sparkline: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct TxAreaColor {
     pub heading: Color,
     pub key: Color,
     pub val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct TcpInfoAreaColor {
     pub heading: Color,
     pub key: Color,
     pub val: Color,
 }
 
-#[derive(Clone, Debug)]
 pub struct TcpConnAreaColor {
     pub border: Color,
     pub filter_highlight_symbol: Color,
     pub filter: Color,
-    pub heading: Color,
     pub local_addr_val: Color,
     pub remote_addr_val: Color,
     pub hostname_val: Color,
@@ -122,12 +95,31 @@ pub struct TcpConnAreaColor {
     pub state_fin_wait: Color,
 }
 
-#[derive(Clone, Debug)]
+pub struct HelpPopupColor {
+    pub border: Color,
+    pub global_heading: Color,
+    pub interface_heading: Color,
+    pub tcp_conn_heading: Color,
+    pub filter_mode: Color,
+    pub key: Color,
+    pub val: Color,
+}
+
+pub struct RxPopupColor {
+    pub border: Color,
+    pub interface_heading: Color,
+    pub download_heading: Color,
+}
+
+pub struct TxPopupColor {
+    pub border: Color,
+    pub interface_heading: Color,
+    pub download_heading: Color,
+}
+
 pub struct Theme {
     pub interface_area_color: InterfaceAreaColor,
     pub overview_area_color: OverviewAreaColor,
-    pub rxgraph_area_color: RxGraphAreaColor,
-    pub txgraph_area_color: TxGraphAreaColor,
     pub rxbar_area_color: RxBarAreaColor,
     pub txbar_area_color: TxBarAreaColor,
     pub info_area_color: InfoAreaColor,
@@ -136,6 +128,9 @@ pub struct Theme {
     pub tcpinfo_area_color: TcpInfoAreaColor,
     pub tcpconn_area_color: TcpConnAreaColor,
     pub sparkline_area_color: SparkLineColor,
+    pub help_popup_color: HelpPopupColor,
+    pub rx_popup_color: RxPopupColor,
+    pub tx_popup_color: TxPopupColor,
 }
 
 pub static THEMES: [(&str, fn() -> Theme); 6] = [
@@ -153,32 +148,24 @@ impl Default for Theme {
             heading: Color::DarkGray,
             data: Color::White,
             muted: Color::Rgb(190, 190, 190),
-            tick: Color::DarkGray,
         };
 
         Self {
             interface_area_color: InterfaceAreaColor {
                 border: Color::Red,
                 filter_highlight_symbol: Color::Yellow,
-                name: Color::Red,
                 filter_heading: Color::Red,
                 filter_background: Color::Red,
+                data: common.data,
             },
 
             overview_area_color: OverviewAreaColor {
                 tick_highlight: Color::Red,
                 tick_heading: common.heading,
-                tick_value: Color::Yellow,
                 border: Color::Yellow,
                 key: common.heading,
                 val: common.data,
             },
-
-            rxgraph_area_color: RxGraphAreaColor {
-                color: Color::Green,
-            },
-
-            txgraph_area_color: TxGraphAreaColor { color: Color::Blue },
 
             rxbar_area_color: RxBarAreaColor {
                 border: Color::Green,
@@ -190,9 +177,6 @@ impl Default for Theme {
                 link_speed_highlight: Color::LightCyan,
                 link_speed_heading: common.heading,
                 link_speed_val: Color::Green,
-                tick_highlight: Color::LightRed,
-                tick_heading: common.heading,
-                tick_val: Color::Blue,
             },
 
             txbar_area_color: TxBarAreaColor {
@@ -235,7 +219,6 @@ impl Default for Theme {
                 border: Color::Blue,
                 filter_highlight_symbol: Color::Red,
                 filter: Color::Yellow,
-                heading: common.heading,
                 local_addr_val: Color::Green,
                 remote_addr_val: Color::Blue,
                 hostname_val: common.muted,
@@ -256,6 +239,26 @@ impl Default for Theme {
                 rx_sparkline: Color::Green,
                 tx_sparkline: Color::Blue,
             },
+
+            help_popup_color: HelpPopupColor {
+                border: Color::Yellow,
+                global_heading: Color::Yellow,
+                interface_heading: Color::Green,
+                tcp_conn_heading: Color::Blue,
+                filter_mode: Color::Magenta,
+                key: common.heading,
+                val: common.data,
+            },
+            rx_popup_color: RxPopupColor {
+                border: Color::Green,
+                interface_heading: Color::Cyan,
+                download_heading: Color::Green,
+            },
+            tx_popup_color: TxPopupColor {
+                border: Color::Blue,
+                interface_heading: Color::Cyan,
+                download_heading: Color::Blue,
+            },
         }
     }
 }
@@ -265,15 +268,13 @@ fn nord() -> Theme {
         heading: Color::Rgb(76, 86, 106),
         data: Color::Rgb(216, 222, 233),
         muted: Color::Rgb(129, 161, 193),
-        tick: Color::Rgb(59, 66, 82),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
             border: Color::Rgb(129, 161, 193),
             filter_highlight_symbol: Color::Rgb(150, 210, 230),
-
-            name: Color::Rgb(129, 161, 193),
+            data: common.data,
             filter_heading: Color::Rgb(94, 129, 172),
             filter_background: Color::Rgb(129, 161, 193),
         },
@@ -281,18 +282,9 @@ fn nord() -> Theme {
         overview_area_color: OverviewAreaColor {
             tick_highlight: Color::Rgb(136, 192, 208),
             tick_heading: common.heading,
-            tick_value: Color::Rgb(129, 161, 193),
             border: Color::Rgb(129, 161, 193),
             key: common.heading,
             val: common.data,
-        },
-
-        rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(143, 188, 187),
-        },
-
-        txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(94, 129, 172),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -305,9 +297,6 @@ fn nord() -> Theme {
             link_speed_highlight: Color::Rgb(129, 161, 193),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(143, 188, 187),
-            tick_highlight: Color::Rgb(136, 192, 208),
-            tick_heading: common.heading,
-            tick_val: Color::Rgb(94, 129, 172),
         },
 
         txbar_area_color: TxBarAreaColor {
@@ -350,7 +339,6 @@ fn nord() -> Theme {
             border: Color::Rgb(129, 161, 193),
             filter_highlight_symbol: Color::Rgb(129, 161, 193),
             filter: Color::Rgb(136, 192, 208),
-            heading: common.heading,
             local_addr_val: Color::Rgb(143, 188, 187),
             remote_addr_val: Color::Rgb(94, 129, 172),
             hostname_val: common.muted,
@@ -371,6 +359,25 @@ fn nord() -> Theme {
             rx_sparkline: Color::Rgb(143, 188, 187),
             tx_sparkline: Color::Rgb(94, 129, 172),
         },
+        help_popup_color: HelpPopupColor {
+            border: Color::Rgb(136, 192, 208),
+            global_heading: Color::Rgb(136, 192, 208),
+            interface_heading: Color::Rgb(143, 188, 187),
+            tcp_conn_heading: Color::Rgb(94, 129, 172),
+            filter_mode: Color::Rgb(180, 142, 173),
+            key: common.heading,
+            val: common.data,
+        },
+        rx_popup_color: RxPopupColor {
+            border: Color::Rgb(143, 188, 187),
+            interface_heading: Color::Rgb(136, 192, 208),
+            download_heading: Color::Rgb(143, 188, 187),
+        },
+        tx_popup_color: TxPopupColor {
+            border: Color::Rgb(94, 129, 172),
+            interface_heading: Color::Rgb(136, 192, 208),
+            download_heading: Color::Rgb(94, 129, 172),
+        },
     }
 }
 
@@ -379,33 +386,23 @@ fn gruvbox() -> Theme {
         heading: Color::Rgb(124, 111, 100),
         data: Color::Rgb(235, 219, 178),
         muted: Color::Rgb(168, 153, 132),
-        tick: Color::Rgb(102, 92, 84),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
             border: Color::Rgb(204, 36, 29),
             filter_highlight_symbol: Color::Rgb(250, 189, 47),
-            name: Color::Rgb(251, 73, 52),
             filter_heading: Color::Rgb(251, 73, 52),
             filter_background: Color::Rgb(204, 36, 29),
+            data: common.data,
         },
 
         overview_area_color: OverviewAreaColor {
             tick_highlight: Color::Rgb(251, 73, 52),
             tick_heading: common.heading,
-            tick_value: Color::Rgb(215, 153, 33),
             border: Color::Rgb(215, 153, 33),
             key: common.heading,
             val: common.data,
-        },
-
-        rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(142, 192, 124),
-        },
-
-        txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(131, 165, 152),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -418,9 +415,6 @@ fn gruvbox() -> Theme {
             link_speed_highlight: Color::Rgb(152, 151, 26),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(184, 187, 38),
-            tick_highlight: Color::Rgb(251, 73, 52),
-            tick_heading: common.heading,
-            tick_val: Color::Rgb(131, 165, 152),
         },
 
         txbar_area_color: TxBarAreaColor {
@@ -463,7 +457,6 @@ fn gruvbox() -> Theme {
             border: Color::Rgb(131, 165, 152),
             filter_highlight_symbol: Color::Rgb(204, 36, 29),
             filter: Color::Rgb(250, 189, 47),
-            heading: common.heading,
             local_addr_val: Color::Rgb(184, 187, 38),
             remote_addr_val: Color::Rgb(131, 165, 152),
             hostname_val: common.muted,
@@ -484,6 +477,25 @@ fn gruvbox() -> Theme {
             rx_sparkline: Color::Rgb(104, 157, 106),
             tx_sparkline: Color::Rgb(69, 133, 136),
         },
+        help_popup_color: HelpPopupColor {
+            border: Color::Rgb(250, 189, 47),
+            global_heading: Color::Rgb(250, 189, 47),
+            interface_heading: Color::Rgb(142, 192, 124),
+            tcp_conn_heading: Color::Rgb(131, 165, 152),
+            filter_mode: Color::Rgb(211, 134, 155),
+            key: common.heading,
+            val: common.data,
+        },
+        rx_popup_color: RxPopupColor {
+            border: Color::Rgb(142, 192, 124),
+            interface_heading: Color::Rgb(104, 157, 106),
+            download_heading: Color::Rgb(142, 192, 124),
+        },
+        tx_popup_color: TxPopupColor {
+            border: Color::Rgb(131, 165, 152),
+            interface_heading: Color::Rgb(104, 157, 106),
+            download_heading: Color::Rgb(131, 165, 152),
+        },
     }
 }
 
@@ -492,33 +504,23 @@ fn solarized_dark() -> Theme {
         heading: Color::Rgb(88, 110, 117),
         data: Color::Rgb(131, 148, 150),
         muted: Color::Rgb(101, 123, 131),
-        tick: Color::Rgb(7, 54, 66),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
             border: Color::Rgb(108, 113, 196),
             filter_highlight_symbol: Color::Rgb(220, 50, 47),
-            name: Color::Rgb(108, 113, 196),
             filter_heading: Color::Rgb(181, 137, 0),
             filter_background: Color::Rgb(108, 113, 196),
+            data: common.data,
         },
 
         overview_area_color: OverviewAreaColor {
             tick_highlight: Color::Rgb(220, 50, 47),
             tick_heading: common.heading,
-            tick_value: Color::Rgb(181, 137, 0),
             border: Color::Rgb(181, 137, 0),
             key: common.heading,
             val: common.data,
-        },
-
-        rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(42, 161, 152),
-        },
-
-        txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(133, 153, 0),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -531,9 +533,6 @@ fn solarized_dark() -> Theme {
             link_speed_highlight: Color::Rgb(42, 161, 152),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(133, 153, 0),
-            tick_highlight: Color::Rgb(220, 50, 47),
-            tick_heading: common.heading,
-            tick_val: Color::Rgb(42, 161, 152),
         },
         txbar_area_color: TxBarAreaColor {
             border: Color::Rgb(133, 153, 0),
@@ -575,7 +574,6 @@ fn solarized_dark() -> Theme {
             border: Color::Rgb(38, 139, 210),
             filter_highlight_symbol: Color::Rgb(108, 113, 196),
             filter: Color::Rgb(220, 50, 47),
-            heading: common.heading,
             local_addr_val: Color::Rgb(133, 153, 0),
             remote_addr_val: Color::Rgb(38, 139, 210),
             hostname_val: common.muted,
@@ -596,6 +594,26 @@ fn solarized_dark() -> Theme {
             rx_sparkline: Color::Rgb(42, 161, 152),
             tx_sparkline: Color::Rgb(133, 153, 0),
         },
+
+        help_popup_color: HelpPopupColor {
+            border: Color::Rgb(181, 137, 0),
+            global_heading: Color::Rgb(181, 137, 0),
+            interface_heading: Color::Rgb(42, 161, 152),
+            tcp_conn_heading: Color::Rgb(38, 139, 210),
+            filter_mode: Color::Rgb(211, 54, 130),
+            key: common.heading,
+            val: common.data,
+        },
+        rx_popup_color: RxPopupColor {
+            border: Color::Rgb(42, 161, 152),
+            interface_heading: Color::Rgb(42, 161, 152),
+            download_heading: Color::Rgb(42, 161, 152),
+        },
+        tx_popup_color: TxPopupColor {
+            border: Color::Rgb(133, 153, 0),
+            interface_heading: Color::Rgb(42, 161, 152),
+            download_heading: Color::Rgb(133, 153, 0),
+        },
     }
 }
 
@@ -604,33 +622,23 @@ fn catppuccin_mocha() -> Theme {
         heading: Color::Rgb(108, 112, 134),
         data: Color::Rgb(205, 214, 244),
         muted: Color::Rgb(147, 153, 178),
-        tick: Color::Rgb(88, 91, 112),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
             border: Color::Rgb(203, 166, 247),
             filter_highlight_symbol: Color::Rgb(250, 179, 135),
-            name: Color::Rgb(203, 166, 247),
             filter_heading: Color::Rgb(243, 139, 168),
             filter_background: Color::Rgb(203, 166, 247),
+            data: common.data,
         },
 
         overview_area_color: OverviewAreaColor {
             tick_highlight: Color::Rgb(243, 139, 168),
             tick_heading: common.heading,
-            tick_value: Color::Rgb(249, 226, 175),
             border: Color::Rgb(249, 226, 175),
             key: common.heading,
             val: common.data,
-        },
-
-        rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(166, 227, 161),
-        },
-
-        txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(203, 166, 247),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -643,9 +651,6 @@ fn catppuccin_mocha() -> Theme {
             link_speed_highlight: Color::Rgb(148, 226, 213),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(166, 227, 161),
-            tick_highlight: Color::Rgb(250, 179, 135),
-            tick_heading: common.heading,
-            tick_val: Color::Rgb(203, 166, 247),
         },
 
         txbar_area_color: TxBarAreaColor {
@@ -688,7 +693,6 @@ fn catppuccin_mocha() -> Theme {
             border: Color::Rgb(137, 180, 250),
             filter_highlight_symbol: Color::Rgb(203, 166, 247),
             filter: Color::Rgb(250, 179, 135),
-            heading: common.heading,
             local_addr_val: Color::Rgb(166, 227, 161),
             remote_addr_val: Color::Rgb(137, 180, 250),
             hostname_val: common.muted,
@@ -709,6 +713,27 @@ fn catppuccin_mocha() -> Theme {
             rx_sparkline: Color::Rgb(166, 227, 161),
             tx_sparkline: Color::Rgb(203, 166, 247),
         },
+
+        help_popup_color: HelpPopupColor {
+            border: Color::Rgb(249, 226, 175),
+            global_heading: Color::Rgb(249, 226, 175),
+            interface_heading: Color::Rgb(166, 227, 161),
+            tcp_conn_heading: Color::Rgb(137, 180, 250),
+            filter_mode: Color::Rgb(245, 194, 231),
+            key: common.heading,
+            val: common.data,
+        },
+
+        rx_popup_color: RxPopupColor {
+            border: Color::Rgb(166, 227, 161),
+            interface_heading: Color::Rgb(148, 226, 213),
+            download_heading: Color::Rgb(166, 227, 161),
+        },
+        tx_popup_color: TxPopupColor {
+            border: Color::Rgb(203, 166, 247),
+            interface_heading: Color::Rgb(148, 226, 213),
+            download_heading: Color::Rgb(203, 166, 247),
+        },
     }
 }
 
@@ -717,34 +742,24 @@ fn ayu() -> Theme {
         heading: Color::Rgb(92, 99, 112),
         data: Color::Rgb(230, 230, 230),
         muted: Color::Rgb(92, 99, 112),
-        tick: Color::Rgb(61, 67, 81),
     };
 
     Theme {
         interface_area_color: InterfaceAreaColor {
             border: Color::Rgb(242, 151, 24),
             filter_highlight_symbol: Color::Rgb(255, 180, 84),
-            name: Color::Rgb(242, 151, 24),
             filter_heading: Color::Rgb(220, 50, 47),
             filter_background: Color::Rgb(191, 97, 106),
+            data: common.data,
         },
 
         overview_area_color: OverviewAreaColor {
             tick_highlight: Color::Red,
             tick_heading: Color::DarkGray,
-            tick_value: Color::Yellow,
 
             border: Color::Rgb(255, 180, 84),
             key: common.heading,
             val: common.data,
-        },
-
-        rxgraph_area_color: RxGraphAreaColor {
-            color: Color::Rgb(185, 202, 74),
-        },
-
-        txgraph_area_color: TxGraphAreaColor {
-            color: Color::Rgb(57, 186, 230),
         },
 
         rxbar_area_color: RxBarAreaColor {
@@ -757,9 +772,6 @@ fn ayu() -> Theme {
             link_speed_highlight: Color::Rgb(57, 186, 230),
             link_speed_heading: common.heading,
             link_speed_val: Color::Rgb(185, 202, 74),
-            tick_highlight: Color::Rgb(242, 151, 24),
-            tick_heading: common.heading,
-            tick_val: Color::Rgb(57, 186, 230),
         },
 
         txbar_area_color: TxBarAreaColor {
@@ -802,8 +814,6 @@ fn ayu() -> Theme {
             border: Color::Rgb(57, 186, 230),
             filter_highlight_symbol: Color::Red,
             filter: Color::Yellow,
-
-            heading: common.heading,
             local_addr_val: Color::Rgb(185, 202, 74),
             remote_addr_val: Color::Rgb(57, 186, 230),
             hostname_val: common.muted,
@@ -822,6 +832,26 @@ fn ayu() -> Theme {
             tx_border_color: Color::Blue,
             rx_sparkline: Color::Green,
             tx_sparkline: Color::Blue,
+        },
+
+        help_popup_color: HelpPopupColor {
+            border: Color::Rgb(255, 180, 84),
+            global_heading: Color::Rgb(255, 180, 84),
+            interface_heading: Color::Rgb(185, 202, 74),
+            tcp_conn_heading: Color::Rgb(57, 186, 230),
+            filter_mode: Color::Rgb(242, 151, 24),
+            key: common.heading,
+            val: common.data,
+        },
+        rx_popup_color: RxPopupColor {
+            border: Color::Rgb(185, 202, 74),
+            interface_heading: Color::Rgb(95, 187, 187),
+            download_heading: Color::Rgb(185, 202, 74),
+        },
+        tx_popup_color: TxPopupColor {
+            border: Color::Rgb(57, 186, 230),
+            interface_heading: Color::Rgb(95, 187, 187),
+            download_heading: Color::Rgb(57, 186, 230),
         },
     }
 }

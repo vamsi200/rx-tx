@@ -1,26 +1,12 @@
 use crate::app::App;
-use crate::models::{self, *};
+use crate::models::*;
 use crate::theme::{Theme, THEMES};
 use anyhow::{anyhow, Error, Ok, Result};
-use clap::builder::Str;
-use core::net;
-use crossterm::event::{self, Event};
-use ratatui::crossterm::event::read;
-use ratatui::style::{Modifier, Style};
-use ratatui::symbols::line::{self, NORMAL};
 use ratatui::text::Line;
-use ratatui::text::Span;
-use ratatui::Terminal;
-use ratatui::{text::Text, Frame};
 use std::collections::{HashMap, HashSet};
-use std::fmt::format;
-use std::fs::{self, rename, File, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::ptr::copy_nonoverlapping;
-use std::thread::{self, sleep};
-use std::time::{Duration, Instant};
-use std::vec;
 
 pub fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
     let mut output = Vec::new();
@@ -78,20 +64,6 @@ pub fn parse_proc_net_dev() -> Result<Vec<NetworkStats>> {
         }
     }
     Ok(output)
-}
-
-pub fn get_network_interfaces(stats: &Vec<NetworkStats>) -> Vec<Line<'_>> {
-    let lines: Vec<Line> = stats
-        .iter()
-        .flat_map(|interface| {
-            let mut lines = vec![];
-
-            lines.push(Line::from(format!(" {}", interface.name)));
-
-            lines
-        })
-        .collect();
-    lines
 }
 
 pub fn get_network_receive_data<'a>(app: &mut App, stats: &Vec<NetworkStats>) -> Vec<Line<'a>> {
@@ -217,22 +189,16 @@ pub fn parse_proc_net_tcp() -> Result<Vec<TcpStats>> {
                 continue;
             }
 
-            let sl = first_split[0].trim_end_matches(":").parse::<u16>()?;
-
             let (local_ip, local_port) = parse_ip_address(first_split[1])?;
             let (remote_ip, remote_port) = parse_ip_address(first_split[2])?;
 
             let state = parse_hex_values(first_split[3])?;
             let (tx_queue, rx_queue) = parse_hex_value_pairs(first_split[4])?;
-            let (timer_active, timer_when) = parse_hex_value_pairs(first_split[5])?;
-            let retrnsmt_timeout = parse_hex_values(first_split[6])?;
 
             let uid = first_split[7].parse::<u32>()?;
-            let timeout = first_split[8].parse::<u32>()?;
             let inode = first_split[9].parse::<u64>()?;
 
             let values = TcpStats {
-                sl: sl,
                 local_ip: local_ip,
                 local_port: local_port,
                 remote_ip: remote_ip,
@@ -240,11 +206,7 @@ pub fn parse_proc_net_tcp() -> Result<Vec<TcpStats>> {
                 state: state,
                 tx_queue: tx_queue,
                 rx_queue: rx_queue,
-                timer_active: timer_active,
-                timer_when: timer_when,
-                retransmit_timeout: retrnsmt_timeout,
                 uid: uid,
-                timeout: timeout,
                 inode: inode,
             };
             output.push(values);
@@ -313,17 +275,6 @@ pub fn tcp_state_name(state: u64) -> &'static str {
         0x0A => "LISTEN",
         0x0B => "CLOSING",
         _ => "UNKNOWN",
-    }
-}
-
-pub fn format_timer(timer_active: u64) -> &'static str {
-    match timer_active {
-        0 => "off",
-        1 => "on",
-        2 => "keepalive",
-        3 => "timewait",
-        4 => "probe",
-        _ => "unknown",
     }
 }
 

@@ -1,6 +1,4 @@
-use anyhow::Ok;
-
-use crate::app::{self, App, ByteUnit};
+use crate::app::{App, ByteUnit};
 
 #[derive(Debug, Clone)]
 pub struct NetworkStats {
@@ -109,9 +107,8 @@ pub fn format_bytes(data: u64, unit: &ByteUnit) -> String {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TcpStats {
-    pub sl: u16,
     pub local_ip: [u8; 4],
     pub local_port: u16,
     pub remote_ip: [u8; 4],
@@ -119,10 +116,6 @@ pub struct TcpStats {
     pub state: u64,
     pub tx_queue: u64,
     pub rx_queue: u64,
-    pub timer_active: u64,
-    pub timer_when: u64,
-    pub retransmit_timeout: u64,
     pub uid: u32,
-    pub timeout: u32,
     pub inode: u64,
 }

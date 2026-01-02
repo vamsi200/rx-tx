@@ -1,47 +1,30 @@
-use crate::app;
 use crate::models::*;
-use crate::parser;
 use crate::parser::*;
 use crate::theme::Theme;
 use crate::theme::THEMES;
 use crate::ui::*;
-use anyhow::{anyhow, Error, Result};
-use clap::builder::Str;
+use anyhow::Result;
 use crossterm::event::KeyModifiers;
-use crossterm::event::{self, read, Event, KeyCode};
-use crossterm::style::SetStyle;
-use ratatui::layout::{Alignment, Constraint, Layout, Margin};
-use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::symbols::scrollbar;
-use ratatui::text::{Line, Masked, Span};
-use ratatui::widgets::block::title;
-use ratatui::widgets::ListState;
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
-use ratatui::{text::Text, Frame};
-use ratatui::{DefaultTerminal, Terminal};
-use std::char;
+use crossterm::event::{self, Event, KeyCode};
+use ratatui::widgets::ScrollbarState;
+use ratatui::DefaultTerminal;
+use ratatui::Frame;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
 use std::result::Result::Ok;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::vec;
 
 pub struct App {
     pub change_theme: bool,
     pub current_theme: Theme,
     pub theme_index: Option<usize>,
     pub update_avg: bool,
-    pub overview_capacity: usize,
     pub main_tab_focus: bool,
     pub interface_speeds: HashMap<String, (f64, f64)>,
     pub edit_rx_mode: bool,
     pub edit_tx_mode: bool,
     pub speed_input: String,
-    pub speed_input_field: SpeedInputField,
     pub editing_interface: Option<String>,
     pub hostname_cache_arc: Arc<Mutex<HashMap<[u8; 4], String>>>,
     pub show_help: bool,
@@ -49,7 +32,6 @@ pub struct App {
     pub tick_rate: Duration,
     pub tick_value: String,
     pub mode: Mode,
-    pub selection_state: ListState,
     pub selected_index: Option<usize>,
     pub selected_interface: InterfaceSelected,
     pub prev_stats: Option<Vec<NetworkStats>>,
@@ -57,7 +39,6 @@ pub struct App {
     pub rx_data: HashMap<String, Vec<(f64, f64)>>,
     pub tx_data: HashMap<String, Vec<(f64, f64)>>,
     pub start_time: Instant,
-    pub last_sample_time: f64,
     pub window: [f64; 2],
     pub raw_bytes: bool,
     pub byte_unit: ByteUnit,
@@ -73,12 +54,6 @@ pub struct App {
     pub history_capacity: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpeedInputField {
-    RX,
-    TX,
-}
-
 impl Default for App {
     fn default() -> Self {
         Self {
@@ -87,11 +62,9 @@ impl Default for App {
             theme_index: None,
             update_avg: false,
             selected_index: None,
-            overview_capacity: 0,
             total_rx_history: Vec::new(),
             total_tx_history: Vec::new(),
             history_capacity: 120,
-            speed_input_field: SpeedInputField::RX,
             main_tab_focus: true,
             interface_speeds: get_interface_speed(),
             edit_tx_mode: false,
@@ -104,11 +77,6 @@ impl Default for App {
             tick_value: String::new(),
             enter_tick_active: false,
             tick_rate: Duration::from_millis(1800),
-            selection_state: {
-                let mut state = ListState::default();
-                state.select(Some(0));
-                state
-            },
             mode: Mode::Normal,
             selected_interface: InterfaceSelected::All,
             prev_stats: None,
@@ -116,7 +84,6 @@ impl Default for App {
             rx_data: HashMap::new(),
             tx_data: HashMap::new(),
             start_time: Instant::now(),
-            last_sample_time: 0.0,
             window: [0.0, 60.0],
             raw_bytes: false,
             byte_unit: ByteUnit::default(),
@@ -158,7 +125,7 @@ pub enum Focus {
 }
 
 impl App {
-    pub fn get_stuff(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+    pub fn get_stuff(&mut self) -> Result<()> {
         let now = self.start_time.elapsed().as_secs_f64();
         self.window = [now - 5.0, now];
 
@@ -223,10 +190,6 @@ impl App {
             .collect();
 
         interface_name_vec.push_front(String::from("all"));
-        let local_address_vec: Vec<_> = parse_proc_net_tcp()?
-            .iter()
-            .map(|x| Ipv4Addr::from(x.local_ip).to_string())
-            .collect();
 
         let mut rx_peak_speed: HashMap<String, f64> = HashMap::new();
         let mut tx_peak_speed: HashMap<String, f64> = HashMap::new();
@@ -469,7 +432,7 @@ impl App {
                                         );
                                         self.mode = Mode::Normal;
                                     }
-                                    self.get_stuff(terminal)?;
+                                    self.get_stuff()?;
                                 }
                             }
                             KeyCode::Esc => {
@@ -631,7 +594,7 @@ impl App {
 
             if last_tick.elapsed() >= self.tick_rate {
                 self.update_avg = true;
-                self.get_stuff(terminal)?;
+                self.get_stuff()?;
 
                 let rx: f64 = self
                     .rx_data

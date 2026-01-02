@@ -1,9 +1,5 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 use crate::app::App;
-use anyhow::{anyhow, Error, Ok, Result};
-use models::*;
+use anyhow::{Ok, Result};
 use parser::*;
 
 mod app;
@@ -16,7 +12,7 @@ fn main() -> Result<()> {
     initialize_conf()?;
     let mut terminal = ratatui::init();
     let mut app = App::default();
-    app.get_stuff(&mut terminal)?;
+    app.get_stuff()?;
     app.run(&mut terminal)?;
 
     ratatui::restore();
