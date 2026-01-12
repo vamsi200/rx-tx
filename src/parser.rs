@@ -2,8 +2,10 @@ use crate::app::App;
 use crate::models::*;
 use crate::theme::{Theme, THEMES};
 use anyhow::{anyhow, Error, Ok, Result};
+use once_cell::sync::Lazy;
 use ratatui::text::Line;
 use std::collections::{HashMap, HashSet};
+use std::env::home_dir;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -306,13 +308,15 @@ pub fn parse_uptime() -> Result<String> {
     Ok(out_string)
 }
 
-const CONF_FILE: &'static str = "rxtx.conf";
+static HOME_DIR: Lazy<PathBuf> = Lazy::new(|| home_dir().unwrap_or_else(|| PathBuf::from(".")));
+
+static CONF_FILE: Lazy<PathBuf> = Lazy::new(|| HOME_DIR.to_path_buf().join(".rxtx.conf"));
 
 pub fn initialize_conf() -> Result<(), Error> {
-    if !Path::new(CONF_FILE).exists() {
+    if !Path::new(&CONF_FILE.as_path()).exists() {
         let theme = format!("Theme: Default\nInterface: default, 0, 0");
 
-        fs::write(CONF_FILE, theme)?;
+        fs::write(&CONF_FILE.as_path(), theme)?;
     }
 
     Ok(())
@@ -320,7 +324,7 @@ pub fn initialize_conf() -> Result<(), Error> {
 // Fetches the theme from the conf, if found nothing then defaults to Default theme
 pub fn get_theme() -> Theme {
     let default_theme = Theme::default();
-    let mut file = match OpenOptions::new().read(true).open(CONF_FILE) {
+    let mut file = match OpenOptions::new().read(true).open(&CONF_FILE.as_path()) {
         std::result::Result::Ok(f) => f,
         Err(_) => return default_theme,
     };
@@ -357,7 +361,7 @@ pub fn save_theme(theme: &'static str) -> Result<(), Error> {
         .create(true)
         .read(true)
         .write(true)
-        .open(CONF_FILE)?;
+        .open(&CONF_FILE.as_path())?;
 
     let mut buf = String::new();
     file.read_to_string(&mut buf)?;
@@ -369,7 +373,7 @@ pub fn save_theme(theme: &'static str) -> Result<(), Error> {
             let new_theme = buf.replace(old_theme, &format!(" {}", theme));
 
             if old_theme != new_theme {
-                fs::write(CONF_FILE, new_theme)?;
+                fs::write(&CONF_FILE.as_path(), new_theme)?;
                 break;
             }
         }
@@ -381,7 +385,7 @@ pub fn save_theme(theme: &'static str) -> Result<(), Error> {
 pub fn get_interface_speed() -> HashMap<String, (f64, f64)> {
     let mut map: HashMap<String, (f64, f64)> = HashMap::new();
 
-    let mut file = match OpenOptions::new().read(true).open(CONF_FILE) {
+    let mut file = match OpenOptions::new().read(true).open(&CONF_FILE.as_path()) {
         std::result::Result::Ok(f) => f,
         Err(_) => return map,
     };
@@ -413,7 +417,7 @@ pub fn get_interface_speed() -> HashMap<String, (f64, f64)> {
 
 // Makes Changes to `rxtx.conf` file - those information will be taken from the TUI.
 pub fn save_interface_speeds(map: &HashMap<String, (f64, f64)>) -> Result<(), Error> {
-    let data = fs::read_to_string(CONF_FILE)?;
+    let data = fs::read_to_string(&CONF_FILE.as_path())?;
     let mut changed = false;
 
     let mut new_lines = Vec::new();
@@ -450,7 +454,7 @@ pub fn save_interface_speeds(map: &HashMap<String, (f64, f64)>) -> Result<(), Er
     }
 
     if changed {
-        fs::write(CONF_FILE, new_lines.join("\n"))?;
+        fs::write(&CONF_FILE.as_path(), new_lines.join("\n"))?;
     }
 
     Ok(())
