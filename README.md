@@ -226,3 +226,4 @@ Binary will be available at:
 | `?` | Open help |
 | `Esc` | Close help |
 
+[![Built With Ratatui](https://img.shields.io/badge/Built_With_Ratatui-000?logo=ratatui&logoColor=fff)](https://ratatui.rs/)
